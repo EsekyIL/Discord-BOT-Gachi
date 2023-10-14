@@ -204,7 +204,7 @@ func main() {
 		embed := &discordgo.MessageEmbed{
 			Title: "📩 Повідомлення видалено! 📩",
 			Description: "\n" + UserMessage + "" +
-				"\n\n**Канал**" + "                                        " + "**Автор**" + "\n" + "<#" + ChannelID + ">" + "<@" + UserID + ">", //20 ALT 255
+				"\n\n**Канал**" + "\n" + "<#" + ChannelID + ">" + "\n" + "**Автор**" + "\n" + "<@" + UserID + ">",
 			Color:     0xed5f5f, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
