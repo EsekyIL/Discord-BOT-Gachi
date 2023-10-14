@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
@@ -10,7 +11,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -118,7 +118,7 @@ func main() {
 		stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 		MessageUpdateID := m.Message.ID
 		UserMessage := ""
-		file, err := os.Open("path/logs/message.log")
+		file, err := os.OpenFile("path/logs/message.log", os.O_RDWR, 0644)
 		if err != nil {
 			fmt.Println("Помилка відкриття файлу:", err)
 			return
@@ -135,6 +135,16 @@ func main() {
 				if len(match) > 1 {
 					UserMessage = match[1]
 				}
+				_, err := file.Seek(-int64(len(line)), io.SeekStart)
+				if err != nil {
+					fmt.Println("error seeking:", err)
+					return
+				}
+				_, err = file.WriteString("Text message: " + m.Content + " | " + "Nickname: " + m.Author.Username + " | " + "ID: " + m.Author.ID + " | " + "messageID: " + m.Message.ID + " | " + "ChannelID: " + m.ChannelID)
+				if err != nil {
+					fmt.Println("error writing:", err)
+					return
+				}
 			}
 		}
 
@@ -143,9 +153,32 @@ func main() {
 			return
 		}
 		embed := &discordgo.MessageEmbed{
-			Title: "🔃 Повідомлення оновлено 🔃",
-			Description: "\n**Було:**" + "\n" + UserMessage + "\n**Стало:**" + "\n" + m.Content + "\n\n**Канал**" + "\n" + "<#" + m.ChannelID + ">" +
-				"\n" + "**Автор**" + "\n" + "<@" + m.Author.ID + ">",
+			Title: "Повідомлення оновлено",
+			Fields: []*discordgo.MessageEmbedField{
+				&discordgo.MessageEmbedField{
+					Name:   "**Канал**",
+					Value:  "<#" + m.ChannelID + ">",
+					Inline: true,
+				},
+				&discordgo.MessageEmbedField{
+					Name:   "**Автор**",
+					Value:  "<@" + m.Author.ID + ">",
+					Inline: true,
+				},
+				&discordgo.MessageEmbedField{
+					Name:   "**Було**",
+					Value:  UserMessage,
+					Inline: false,
+				},
+				&discordgo.MessageEmbedField{
+					Name:   "**Стало**",
+					Value:  m.Content,
+					Inline: true,
+				},
+			},
+			Thumbnail: &discordgo.MessageEmbedThumbnail{
+				URL: "https://raw.githubusercontent.com/EsekyIL/Discord-BOT-Gachi/main/reload.png?token=GHSAT0AAAAAACIYYIULUQNDTQQIOJRJOUCCZJKVKTQ",
+			},
 			Color:     0xeda15f, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
@@ -202,9 +235,27 @@ func main() {
 			return
 		}
 		embed := &discordgo.MessageEmbed{
-			Title: "📩 Повідомлення видалено! 📩",
-			Description: "\n" + UserMessage + "" +
-				"\n\n**Канал**" + "\n" + "<#" + ChannelID + ">" + "\n" + "**Автор**" + "\n" + "<@" + UserID + ">",
+			Title: "Повідомлення видалено!",
+			Fields: []*discordgo.MessageEmbedField{
+				&discordgo.MessageEmbedField{
+					Name:   "**Канал**",
+					Value:  "<#" + ChannelID + ">",
+					Inline: true,
+				},
+				&discordgo.MessageEmbedField{
+					Name:   "**Автор**",
+					Value:  "<@" + UserID + ">",
+					Inline: true,
+				},
+				&discordgo.MessageEmbedField{
+					Name:   "Текст повідомлення",
+					Value:  UserMessage,
+					Inline: false,
+				},
+			},
+			Thumbnail: &discordgo.MessageEmbedThumbnail{
+				URL: "https://raw.githubusercontent.com/EsekyIL/Discord-BOT-Gachi/main/delete.png?token=GHSAT0AAAAAACIYYIUKAWFH55GXSFWBGIF2ZJKVA4A",
+			},
 			Color:     0xed5f5f, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
@@ -221,10 +272,24 @@ func main() {
 		if vs.ChannelID == "" {
 			channelID := userChannels[vs.UserID]
 			embed1 := &discordgo.MessageEmbed{
-				Title:       "🔇 Користувач вийшов з голосового каналу 🔇",
-				Description: "**Користувач**" + "\n" + "<@" + vs.UserID + ">" + "\n\n" + "**Канал**" + "\n" + "<#" + channelID + ">" + "\n\n",
-				Color:       0xed5f5f, // Колір (у форматі HEX)
-				Timestamp:   stringTime,
+				Title: "Користувач вийшов з голосового каналу",
+				Fields: []*discordgo.MessageEmbedField{
+					&discordgo.MessageEmbedField{
+						Name:   "**Канал**",
+						Value:  "<#" + channelID + ">",
+						Inline: true,
+					},
+					&discordgo.MessageEmbedField{
+						Name:   "**Користувач**",
+						Value:  "<@" + vs.UserID + ">",
+						Inline: true,
+					},
+				},
+				Thumbnail: &discordgo.MessageEmbedThumbnail{
+					URL: "https://raw.githubusercontent.com/EsekyIL/Discord-BOT-Gachi/main/leave.png?token=GHSAT0AAAAAACIYYIUKITA63UEC64H6UCIAZJKVUVQ",
+				},
+				Color:     0xed5f5f, // Колір (у форматі HEX)
+				Timestamp: stringTime,
 			}
 			_, err = s.ChannelMessageSendEmbed("1161397893622661240", embed1)
 			if err != nil {
@@ -234,18 +299,51 @@ func main() {
 			delete(userChannels, vs.UserID)
 		} else {
 			embed2 := &discordgo.MessageEmbed{
-				Title:       "🔊 Користувач зайшов в голосовий канал 🔊",
-				Description: "**Користувач**" + "\n" + "<@" + vs.UserID + ">" + "\n\n" + "**Канал**" + "\n" + "<#" + vs.ChannelID + ">" + "\n\n",
-				Color:       0x5fed80, // Колір (у форматі HEX)
-				Timestamp:   stringTime,
+				Title: "Користувач зайшов в голосовий канал",
+				Fields: []*discordgo.MessageEmbedField{
+					&discordgo.MessageEmbedField{
+						Name:   "**Канал**",
+						Value:  "<#" + vs.ChannelID + ">",
+						Inline: true,
+					},
+					&discordgo.MessageEmbedField{
+						Name:   "**Користувач**",
+						Value:  "<@" + vs.UserID + ">",
+						Inline: true,
+					},
+				},
+				Thumbnail: &discordgo.MessageEmbedThumbnail{
+					URL: "https://raw.githubusercontent.com/EsekyIL/Discord-BOT-Gachi/main/join.png?token=GHSAT0AAAAAACIYYIULMIVPGR6SUCNDUQYKZJKV2WA",
+				},
+				Color:     0x5fed80, // Колір (у форматі HEX)
+				Timestamp: stringTime,
 			}
 			if len(userChannels[vs.UserID]) > 10 {
 				if vs.ChannelID != userChannels[vs.UserID] {
 					embed3 := &discordgo.MessageEmbed{
-						Title:       "🚣‍♂️ Користувач перейшов в інший голосовий канал 🚣‍♂️",
-						Description: "**Користувач**" + "\n" + "<@" + vs.UserID + ">" + "\n\n" + "**Старий канал**" + "\n" + "<#" + userChannels[vs.UserID] + ">" + "\n\n" + "**Новий канал**" + "\n" + "<#" + vs.ChannelID + ">" + "\n\n",
-						Color:       0xc9c9c9, // Колір (у форматі HEX)
-						Timestamp:   stringTime,
+						Title: "Користувач перейшов в інший голосовий канал",
+						Fields: []*discordgo.MessageEmbedField{
+							&discordgo.MessageEmbedField{
+								Name:   "**Старий канал**",
+								Value:  "<#" + userChannels[vs.UserID] + ">",
+								Inline: true,
+							},
+							&discordgo.MessageEmbedField{
+								Name:   "**Новий канал**",
+								Value:  "<#" + vs.ChannelID + ">",
+								Inline: true,
+							},
+							&discordgo.MessageEmbedField{
+								Name:   "**Користувач**",
+								Value:  "<@" + vs.UserID + ">",
+								Inline: false,
+							},
+						},
+						Thumbnail: &discordgo.MessageEmbedThumbnail{
+							URL: "https://raw.githubusercontent.com/EsekyIL/Discord-BOT-Gachi/main/running.png?token=GHSAT0AAAAAACIYYIUKU4YJQ7AFVM6ACRZOZJKV7HA",
+						},
+						Color:     0xc9c9c9, // Колір (у форматі HEX)
+						Timestamp: stringTime,
 					}
 					_, err = s.ChannelMessageSendEmbed("1161397893622661240", embed3)
 					if err != nil {
@@ -263,22 +361,6 @@ func main() {
 			userChannels[vs.UserID] = vs.ChannelID
 		}
 	})
-	/*embed := &discordgo.MessageEmbed{
-		Title:       "🎖️ Звання серверу 🎖️",
-		Description: "",
-		Color:       0x00ff00, // Колір (у форматі HEX)
-	}
-
-	_, err := s.ChannelMessageSendEmbed(m.ChannelID, embed)
-	if err != nil {
-		fmt.Println("error getting member:", err)
-		return
-	}*/
-	/*err = s.MessageReactionAdd(m.ChannelID, "1161369411710615623", "🎮")
-	  		if err != nil {
-	      		fmt.Println("error adding reaction:", err)
-	  		}*/
-
 	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged
 
 	err = sess.Open()
