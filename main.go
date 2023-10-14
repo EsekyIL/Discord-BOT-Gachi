@@ -11,6 +11,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
 	"github.com/bwmarrin/discordgo"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
@@ -31,14 +32,7 @@ func main() {
 		MaxBackups: 3,
 		MaxAge:     1, // дні
 	}
-
-	_, err := l.Write([]byte("Цей бот був написаний tg: https://t.me/Esekyil \n\n"))
-	if err != nil {
-		log.Fatal(err)
-	}
-
 	logger = log.New(l, "", log.LstdFlags)
-
 	sess, err := discordgo.New("Bot " + Token)
 	if err != nil {
 		log.Fatal(err)
