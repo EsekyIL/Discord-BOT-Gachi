@@ -26,6 +26,8 @@ func main() {
 	userChannels = make(map[string]string)
 	var userTimeJoin map[string]string
 	userTimeJoin = make(map[string]string)
+	var userTimeJoinVoice map[string]string
+	userTimeJoinVoice = make(map[string]string)
 	sess, err := discordgo.New("Bot " + Token) // Відкриття сессії з ботом
 	if err != nil {
 		log.Fatal(err)
@@ -99,6 +101,35 @@ func main() {
 			channelID_M := ic.ApplicationCommandData().Options[0].StringValue()
 			channelID_V := ic.ApplicationCommandData().Options[1].StringValue()
 			channelID_S := ic.ApplicationCommandData().Options[2].StringValue()
+			switch {
+			case len(channelID_M) > 19:
+				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ Довжина першої опції має бути не більше 19 символів",
+						Flags:   1 << 6,
+					},
+				})
+				return
+			case len(channelID_V) > 19:
+				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ Довжина другої опції має бути не більше 19 символів",
+						Flags:   1 << 6,
+					},
+				})
+				return
+			case len(channelID_S) > 19:
+				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ Довжина третьої опції має бути не більше 19 символів",
+						Flags:   1 << 6,
+					},
+				})
+				return
+			}
 
 			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -126,6 +157,35 @@ func main() {
 			emoji_string := ic.ApplicationCommandData().Options[1].StringValue()
 			role_ID := ic.ApplicationCommandData().Options[2].StringValue()
 
+			switch {
+			case len(message_ID) > 19:
+				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ Довжина першої опції має бути не більше 19 символів",
+						Flags:   1 << 6,
+					},
+				})
+				return
+			case len(emoji_string) > 10:
+				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ Довжина другої опції має бути не більше 10 символів",
+						Flags:   1 << 6,
+					},
+				})
+				return
+			case len(role_ID) > 19:
+				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "⚠️ Довжина третьої опції має бути не більше 19 символів",
+						Flags:   1 << 6,
+					},
+				})
+				return
+			}
 			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
@@ -154,9 +214,10 @@ func main() {
 		basePath := "./servers"
 		folderName := m.Guild.ID
 		folderPath := filepath.Join(basePath, folderName)
-		err := os.Mkdir(folderPath, 0755)
-		if err != nil {
-			fmt.Println("Помилка при створенні папки:", err)
+		_, err = os.Stat(folderPath)
+		if os.IsNotExist(err) {
+			err = os.Mkdir(folderPath, 0755)
+		} else {
 			return
 		}
 		directoryPath := filepath.Join(basePath, folderName)
@@ -174,6 +235,21 @@ func main() {
 		section.Key("MESSAGE_REACTION_ID").SetValue("")
 		section.Key("EMOJI_REACTION").SetValue("")
 		section.Key("ROLE_ADD_ID").SetValue("")
+		section = cfg.Section("LVL_EXP_USERS")
+		members, err := s.GuildMembers(m.Guild.ID, "", 1000)
+		if err != nil {
+			fmt.Println("Помилка отримання учасників сервера:", err)
+			return
+		}
+		for _, member := range members {
+			switch {
+			case member.User.ID == "1160175895475138611":
+				continue
+			case len(member.Roles) == 0:
+				continue
+			}
+			section.Key(member.User.ID).SetValue("0")
+		}
 		err = cfg.SaveTo(filePath)
 		if err != nil {
 			fmt.Println("Помилка при збереженні у файл:", err)
@@ -202,15 +278,6 @@ func main() {
 		ChannelLogsMessages := section.Key("CHANNEL_LOGS_MESSAGE_ID").String()
 		ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
 		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
-		if len(ChannelLogsMessages) != 19 {
-			return
-		}
-		if len(ChannelLogsVoice) != 19 {
-			return
-		}
-		if len(ChannelLogsServer) != 19 {
-			return
-		}
 		if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsVoice || m.ChannelID == ChannelLogsServer {
 			return
 		} else {
@@ -222,6 +289,76 @@ func main() {
 			defer file.Close()
 			logger := log.New(file, "", log.LstdFlags)
 			logger.Println("Text message: " + m.Content + " | " + "Nickname: " + m.Author.Username + " | " + "ID: " + m.Author.ID + " | " + "messageID: " + m.Message.ID + " | " + "ChannelID: " + m.ChannelID)
+			if len(m.Content) >= 3 && len(m.Content) <= 10 {
+				var EXP uint32
+				section = cfg.Section("LVL_EXP_USERS")
+				valueStr := section.Key(m.Author.ID).String()
+				parsedEXP, err := strconv.ParseUint(valueStr, 10, 32)
+				if err != nil {
+					fmt.Println("Помилка конвертації значення рядка в uint32:", err)
+					// Обробка помилки, якщо потрібно
+					return
+				}
+				EXP = uint32(parsedEXP)
+				EXP += 2
+				EXPStr := strconv.Itoa(int(EXP))
+				section.Key(m.Author.ID).SetValue(EXPStr)
+				basePath := "./servers"
+				folderName := m.GuildID
+				directoryPath := filepath.Join(basePath, folderName)
+				filePath = filepath.Join(directoryPath, "config.ini")
+				err = cfg.SaveTo(filePath)
+				if err != nil {
+					fmt.Println("Помилка при збереженні у файл:", err)
+					return
+				}
+			} else if len(m.Content) > 10 && len(m.Content) < 20 {
+				var EXP uint32
+				section = cfg.Section("LVL_EXP_USERS")
+				valueStr := section.Key(m.Author.ID).String()
+				parsedEXP, err := strconv.ParseUint(valueStr, 10, 32)
+				if err != nil {
+					fmt.Println("Помилка конвертації значення рядка в uint32:", err)
+					// Обробка помилки, якщо потрібно
+					return
+				}
+				EXP = uint32(parsedEXP)
+				EXP += 5
+				EXPStr := strconv.Itoa(int(EXP))
+				section.Key(m.Author.ID).SetValue(EXPStr)
+				basePath := "./servers"
+				folderName := m.GuildID
+				directoryPath := filepath.Join(basePath, folderName)
+				filePath = filepath.Join(directoryPath, "config.ini")
+				err = cfg.SaveTo(filePath)
+				if err != nil {
+					fmt.Println("Помилка при збереженні у файл:", err)
+					return
+				}
+			} else if len(m.Content) >= 20 {
+				var EXP uint32
+				section = cfg.Section("LVL_EXP_USERS")
+				valueStr := section.Key(m.Author.ID).String()
+				parsedEXP, err := strconv.ParseUint(valueStr, 10, 32)
+				if err != nil {
+					fmt.Println("Помилка конвертації значення рядка в uint32:", err)
+					// Обробка помилки, якщо потрібно
+					return
+				}
+				EXP = uint32(parsedEXP)
+				EXP += 10
+				EXPStr := strconv.Itoa(int(EXP))
+				section.Key(m.Author.ID).SetValue(EXPStr)
+				basePath := "./servers"
+				folderName := m.GuildID
+				directoryPath := filepath.Join(basePath, folderName)
+				filePath = filepath.Join(directoryPath, "config.ini")
+				err = cfg.SaveTo(filePath)
+				if err != nil {
+					fmt.Println("Помилка при збереженні у файл:", err)
+					return
+				}
+			}
 		}
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) { // Модуль додавання ролі по реакції на повідомлення
@@ -234,10 +371,10 @@ func main() {
 		MessageReactionAddID := section.Key("MESSAGE_REACTION_ID").String()
 		EmojiReaction := section.Key("EMOJI_REACTION").String()
 		addroleID := section.Key("ROLE_ADD_ID").String()
-		if len(MessageReactionAddID) != 19 {
+		switch {
+		case len(MessageReactionAddID) != 19:
 			return
-		}
-		if len(addroleID) != 19 {
+		case len(addroleID) != 19:
 			return
 		}
 		if m.MessageID == MessageReactionAddID {
@@ -297,6 +434,17 @@ func main() {
 						fmt.Println("error adding role,", err)
 						return
 					}
+					basePath := "./servers"
+					folderName := m.GuildID
+					directoryPath := filepath.Join(basePath, folderName)
+					filePath := filepath.Join(directoryPath, "config.ini")
+					section = cfg.Section("LVL_EXP_USERS")
+					section.Key(m.UserID).SetValue("0")
+					err = cfg.SaveTo(filePath)
+					if err != nil {
+						fmt.Println("Помилка при збереженні у файл:", err)
+						return
+					}
 				}
 			}
 		}
@@ -315,13 +463,12 @@ func main() {
 		ChannelLogsMessages := section.Key("CHANNEL_LOGS_MESSAGE_ID").String()
 		ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
 		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
-		if len(ChannelLogsMessages) != 19 {
+		switch {
+		case len(ChannelLogsMessages) != 19:
 			return
-		}
-		if len(ChannelLogsVoice) != 19 {
+		case len(ChannelLogsVoice) != 19:
 			return
-		}
-		if len(ChannelLogsServer) != 19 {
+		case len(ChannelLogsServer) != 19:
 			return
 		}
 		if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsServer || m.ChannelID == ChannelLogsVoice {
@@ -412,13 +559,12 @@ func main() {
 		ChannelLogsMessages := section.Key("CHANNEL_LOGS_MESSAGE_ID").String()
 		ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
 		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
-		if len(ChannelLogsMessages) != 19 {
+		switch {
+		case len(ChannelLogsMessages) != 19:
 			return
-		}
-		if len(ChannelLogsVoice) != 19 {
+		case len(ChannelLogsVoice) != 19:
 			return
-		}
-		if len(ChannelLogsServer) != 19 {
+		case len(ChannelLogsServer) != 19:
 			return
 		}
 		if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsServer || m.ChannelID == ChannelLogsVoice {
@@ -583,6 +729,8 @@ func main() {
 				fmt.Println("error getting member:", err)
 				return
 			}
+			JoinTime := time.Now()
+			userTimeJoinVoice[vs.UserID] = strconv.FormatInt(JoinTime.Unix(), 10)
 			userChannels[vs.UserID] = vs.ChannelID
 		} else {
 			channelID := userChannels[vs.UserID]
@@ -615,6 +763,40 @@ func main() {
 				fmt.Println("error getting member:", err)
 				return
 			}
+			LeaveTime := time.Now()
+			JoinTime := userTimeJoinVoice[vs.UserID]
+			// Переведення JoinTime в int64 (Unix-час)
+			JoinTimeUnix, err := strconv.ParseInt(JoinTime, 10, 64)
+			if err != nil {
+				// Обробка помилки, якщо парсинг невдалося
+				fmt.Println("Помилка конвертації JoinTime в int64:", err)
+				return
+			}
+			// Визначення різниці в часі між LeaveTime та JoinTime
+			currentTime := (LeaveTime.Unix() - JoinTimeUnix) / 60
+			var EXP uint32
+			section = cfg.Section("LVL_EXP_USERS")
+			valueStr := section.Key(vs.UserID).String()
+			parsedEXP, err := strconv.ParseUint(valueStr, 10, 32)
+			if err != nil {
+				fmt.Println("Помилка конвертації значення рядка в uint32:", err)
+				// Обробка помилки, якщо потрібно
+				return
+			}
+			EXP = uint32(parsedEXP)
+			EXP += uint32(currentTime)
+			EXPStr := strconv.Itoa(int(EXP))
+			section.Key(vs.UserID).SetValue(EXPStr)
+			basePath := "./servers"
+			folderName := vs.GuildID
+			directoryPath := filepath.Join(basePath, folderName)
+			filePath := filepath.Join(directoryPath, "config.ini")
+			err = cfg.SaveTo(filePath)
+			if err != nil {
+				fmt.Println("Помилка при збереженні у файл:", err)
+				return
+			}
+			delete(userTimeJoinVoice, vs.UserID)
 			delete(userChannels, vs.UserID)
 		}
 	})
