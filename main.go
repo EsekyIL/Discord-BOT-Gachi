@@ -26,12 +26,11 @@ func main() {
 	userChannels = make(map[string]string)
 	var userTimeJoin map[string]string
 	userTimeJoin = make(map[string]string)
-
-	sess, err := discordgo.New("Bot " + Token)
+	sess, err := discordgo.New("Bot " + Token) // Відкриття сессії з ботом
 	if err != nil {
 		log.Fatal(err)
 	}
-	cmdLogs := &discordgo.ApplicationCommand{
+	cmdLogs := &discordgo.ApplicationCommand{ // Створення тіла команди
 		Name:        "logs",
 		Description: "Налаштування логування на сервері",
 		Type:        discordgo.ChatApplicationCommand,
@@ -81,7 +80,7 @@ func main() {
 			},
 		},
 	}
-	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdLogs)
+	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdLogs) // Створення і відправка команд
 	if err != nil {
 		fmt.Println("Error creating application command,", err)
 		return
@@ -91,7 +90,7 @@ func main() {
 		fmt.Println("Error creating application command,", err)
 		return
 	}
-	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) { // Модуль зчитування команд та збереження результату в файл
 		if ic.Type == discordgo.InteractionMessageComponent {
 			return
 		}
@@ -151,49 +150,30 @@ func main() {
 		}
 
 	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.GuildCreate) {
-		// Шлях до основної папки, де вже існує папка "servers"
+	sess.AddHandler(func(s *discordgo.Session, m *discordgo.GuildCreate) { // Модуль створення папки серверу, конфігураційного файлу а також лога повідомлень
 		basePath := "./servers"
-
-		// Ім'я папки, яку ви хочете створити в папці "servers"
-		folderName := m.Guild.ID // Ви можете змінити це на потрібне значення
-
-		// Шлях до нової папки в межах "servers"
+		folderName := m.Guild.ID
 		folderPath := filepath.Join(basePath, folderName)
-
-		// Створення папки "GuildName" в межах "servers"
 		err := os.Mkdir(folderPath, 0755)
 		if err != nil {
 			fmt.Println("Помилка при створенні папки:", err)
 			return
 		}
-
-		// Шлях до папки, де буде знаходитися файл config.ini
 		directoryPath := filepath.Join(basePath, folderName)
-
-		// Шлях до файлу config.ini
 		filePath := filepath.Join(directoryPath, "config.ini")
-
-		// Створення нового об'єкту конфігурації
 		cfg := ini.Empty()
-
-		// Створення секції (може бути позначена як "")
 		section := cfg.Section("GUILD")
-
 		section.Key("GUILD_NAME").SetValue(m.Guild.Name)
 		section.Key("GUILD_ID").SetValue(m.Guild.ID)
 		section.Key("GUILD_REGION").SetValue(m.Guild.Region)
-
 		section = cfg.Section("LOGS")
 		section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue("")
 		section.Key("CHANNEL_LOGS_VOICE_ID").SetValue("")
 		section.Key("CHANNEL_LOGS_SERVER_ID").SetValue("")
-
 		section = cfg.Section("EMOJI_REACTIONS")
 		section.Key("MESSAGE_REACTION_ID").SetValue("")
 		section.Key("EMOJI_REACTION").SetValue("")
 		section.Key("ROLE_ADD_ID").SetValue("")
-		// Зберігаємо зміни у файл
 		err = cfg.SaveTo(filePath)
 		if err != nil {
 			fmt.Println("Помилка при збереженні у файл:", err)
@@ -207,13 +187,12 @@ func main() {
 			MaxAge:     30, // дні
 		}
 		logger = log.New(l, "", log.LstdFlags)
-		logger.Println("Привіт, цей бот був написаний власними ручками. https://github.com/EsekyIL/Discord-BOT-Gachi")
+		logger.Println("Привіт, цей бот був написаний ручками 𝕙𝕥𝕥𝕡𝕤://𝕥.𝕞𝕖/𝔼𝕤𝕖𝕜𝕪𝕚𝕝 ♥")
 	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) {
+	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль відстеження повідомлень, а також запис їх у log
 		if m.Author.Bot {
 			return
 		}
-		// Перевірка, чи користувач є адміністратором
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
@@ -245,7 +224,7 @@ func main() {
 			logger.Println("Text message: " + m.Content + " | " + "Nickname: " + m.Author.Username + " | " + "ID: " + m.Author.ID + " | " + "messageID: " + m.Message.ID + " | " + "ChannelID: " + m.ChannelID)
 		}
 	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) { // Модуль додавання ролі по реакції на повідомлення
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
@@ -323,7 +302,7 @@ func main() {
 		}
 
 	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) {
+	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) { // Модуль логування оновленого повідомлення, а також запис у log
 		if m.Author == nil || m.Author.Bot {
 			return
 		}
@@ -423,7 +402,7 @@ func main() {
 		file.Close()
 
 	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) {
+	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) { // Модуль логування видаленого повідомлення
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
@@ -514,7 +493,7 @@ func main() {
 		}
 		file.Close()
 	})
-	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
+	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) { // Модуль логування входу/переходу/виходу в голосових каналах
 		if userChannels[vs.UserID] == vs.ChannelID {
 			return
 		}
@@ -639,7 +618,7 @@ func main() {
 			delete(userChannels, vs.UserID)
 		}
 	})
-	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
+	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) { // Модуль логування надходження користувачів на сервер
 		cfg, err := ini.Load("servers/" + gma.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
@@ -684,7 +663,7 @@ func main() {
 			return
 		}
 	})
-	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
+	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) { // Модуль логування виходу користувачів з серверу
 		cfg, err := ini.Load("servers/" + gmr.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
@@ -733,7 +712,7 @@ func main() {
 		}
 		delete(userTimeJoin, gmr.User.ID)
 	})
-	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildBanAdd) {
+	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildBanAdd) { // Модуль логування бану користувачів на сервер
 		cfg, err := ini.Load("servers/" + gmr.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
@@ -770,7 +749,7 @@ func main() {
 			return
 		}
 	})
-	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers
+	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers // Доп. дозволи
 
 	err = sess.Open()
 	if err != nil {
@@ -780,7 +759,7 @@ func main() {
 
 	fmt.Println("The bot is online!")
 
-	sc := make(chan os.Signal, 1)
+	sc := make(chan os.Signal, 1) // Вимкнення бота CTRL+C
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sc
 }
