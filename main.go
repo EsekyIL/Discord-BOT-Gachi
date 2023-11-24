@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	const Token = "MTE2MDE3NTg5NTQ3NTEzODYxMQ.GblEFM.v-JGilyUhGd9g_ixkBAg3JNzV2ryFPy60afouQ"
+	const Token = "MTE2MDE3NTg5NTQ3NTEzODYxMQ.GfSoxQ.Q1jTHNBHIIQcPAL_pnUmnih8OecIC2sZIp9JvU"
 	const commandPrefix = "!"
 	var userChannels map[string]string
 	userChannels = make(map[string]string)
@@ -31,6 +31,126 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	cmdLogs := &discordgo.ApplicationCommand{
+		Name:        "logs",
+		Description: "Налаштування логування на сервері",
+		Type:        discordgo.ChatApplicationCommand,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "message_id_channel",
+				Description: "Введіть ID каналу для логування повідомлень",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "voice_id_channel",
+				Description: "Введіть ID каналу для логування голосових каналів",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "server_id_channel",
+				Description: "Введіть ID каналу для логування серверу (входу, виходу, банів)",
+				Required:    true,
+			},
+		},
+	}
+	cmdEmojiReactions := &discordgo.ApplicationCommand{
+		Name:        "reaction",
+		Description: "Видача ролі на сервері по emoji",
+		Type:        discordgo.ChatApplicationCommand,
+		Options: []*discordgo.ApplicationCommandOption{
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "message_id",
+				Description: "Введіть ID повідомлення на якому будуть Emoji",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "emoji",
+				Description: "Введіть Emoji яке мають натискати користувачі",
+				Required:    true,
+			},
+			{
+				Type:        discordgo.ApplicationCommandOptionString,
+				Name:        "role_id",
+				Description: "Введіть ID ролі, яка буде видаватись користувачам",
+				Required:    true,
+			},
+		},
+	}
+	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdLogs)
+	if err != nil {
+		fmt.Println("Error creating application command,", err)
+		return
+	}
+	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdEmojiReactions)
+	if err != nil {
+		fmt.Println("Error creating application command,", err)
+		return
+	}
+	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+		if ic.Type == discordgo.InteractionMessageComponent {
+			return
+		}
+		switch {
+		case ic.ApplicationCommandData().Name == "logs":
+			channelID_M := ic.ApplicationCommandData().Options[0].StringValue()
+			channelID_V := ic.ApplicationCommandData().Options[1].StringValue()
+			channelID_S := ic.ApplicationCommandData().Options[2].StringValue()
+
+			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Тепер ви можете користуватись логуванням бота!",
+					Flags:   1 << 6,
+				},
+			})
+			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
+			if err != nil {
+				fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+				return
+			}
+			section := cfg.Section("LOGS")
+			section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(channelID_M)
+			section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(channelID_V)
+			section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(channelID_S)
+			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
+			if err != nil {
+				fmt.Println("Помилка при збереженні конфігураційного файлу:", err)
+				return
+			}
+		case ic.ApplicationCommandData().Name == "reaction":
+			message_ID := ic.ApplicationCommandData().Options[0].StringValue()
+			emoji_string := ic.ApplicationCommandData().Options[1].StringValue()
+			role_ID := ic.ApplicationCommandData().Options[2].StringValue()
+
+			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "Тепер ви можете користуватись видачею ролей через Emoji!",
+					Flags:   1 << 6,
+				},
+			})
+			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
+			if err != nil {
+				fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+				return
+			}
+			section := cfg.Section("EMOJI_REACTIONS")
+			section.Key("MESSAGE_REACTION_ID").SetValue(message_ID)
+			section.Key("EMOJI_REACTION").SetValue(emoji_string)
+			section.Key("ROLE_ADD_ID").SetValue(role_ID)
+			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
+			if err != nil {
+				fmt.Println("Помилка при збереженні конфігураційного файлу:", err)
+				return
+			}
+		}
+
+	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.GuildCreate) {
 		// Шлях до основної папки, де вже існує папка "servers"
 		basePath := "./servers"
@@ -57,18 +177,22 @@ func main() {
 		// Створення нового об'єкту конфігурації
 		cfg := ini.Empty()
 
-		// Створення секції за замовчуванням (може бути позначена як "")
-		section := cfg.Section("default")
+		// Створення секції (може бути позначена як "")
+		section := cfg.Section("GUILD")
 
-		// Додаємо ключі та значення за замовчуванням
-		section.Key("GuildID").SetValue(m.Guild.ID)
-		section.Key("ChannelLogsMessages").SetValue("")
-		section.Key("ChannelLogsVoice").SetValue("")
-		section.Key("ChannelLogsServer").SetValue("")
-		section.Key("MessageReactionAddID").SetValue("")
-		section.Key("EmojiReaction").SetValue("")
-		section.Key("AddRoleID").SetValue("")
-		section.Key("AddRolelvlID").SetValue("")
+		section.Key("GUILD_NAME").SetValue(m.Guild.Name)
+		section.Key("GUILD_ID").SetValue(m.Guild.ID)
+		section.Key("GUILD_REGION").SetValue(m.Guild.Region)
+
+		section = cfg.Section("LOGS")
+		section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue("")
+		section.Key("CHANNEL_LOGS_VOICE_ID").SetValue("")
+		section.Key("CHANNEL_LOGS_SERVER_ID").SetValue("")
+
+		section = cfg.Section("EMOJI_REACTIONS")
+		section.Key("MESSAGE_REACTION_ID").SetValue("")
+		section.Key("EMOJI_REACTION").SetValue("")
+		section.Key("ROLE_ADD_ID").SetValue("")
 		// Зберігаємо зміни у файл
 		err = cfg.SaveTo(filePath)
 		if err != nil {
@@ -90,109 +214,24 @@ func main() {
 			return
 		}
 		// Перевірка, чи користувач є адміністратором
-		member, err := s.GuildMember(m.GuildID, m.Author.ID)
-		if err != nil {
-			fmt.Println("Помилка отримання інформації про користувача:", err)
-			return
-		}
-
-		for _, roleID := range member.Roles {
-			role, err := s.State.Role(m.GuildID, roleID)
-			if err != nil {
-				fmt.Println("Помилка отримання інформації про роль:", err)
-				continue
-			}
-			if role.Permissions&discordgo.PermissionAdministrator != 0 {
-				// Користувач є адміністратором
-				cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
-				if err != nil {
-					fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
-					return
-				}
-				if strings.HasPrefix(m.Content, commandPrefix+"logs") {
-					parts := strings.Fields(m.Content)
-					if len(parts) >= 4 {
-						section := cfg.Section("default")
-						section.Key("ChannelLogsMessages").SetValue(parts[1])
-						section.Key("ChannelLogsVoice").SetValue(parts[2])
-						section.Key("ChannelLogsServer").SetValue(parts[3])
-						err = cfg.SaveTo("servers/" + m.GuildID + "/config.ini")
-						if err != nil {
-							fmt.Println("Помилка при збереженні конфігураційного файлу:", err)
-							return
-						}
-						err := s.ChannelMessageDelete(m.ChannelID, m.Message.ID)
-						if err != nil {
-							fmt.Println("error sending message:", err)
-							return
-						}
-						return
-					}
-				}
-				if strings.HasPrefix(m.Content, commandPrefix+"addroleEmoji") {
-					parts := strings.Fields(m.Content)
-					if len(parts) >= 5 {
-						section := cfg.Section("default")
-						section.Key("EmojiReaction").SetValue(parts[1])
-						section.Key("MessageReactionAddID").SetValue(parts[2])
-						section.Key("AddRoleID").SetValue(parts[3])
-						section.Key("AddRolelvlID").SetValue(parts[4])
-						err = cfg.SaveTo("servers/" + m.GuildID + "/config.ini")
-						if err != nil {
-							fmt.Println("Помилка при збереженні конфігураційного файлу:", err)
-							return
-						}
-						err := s.ChannelMessageDelete(m.ChannelID, m.Message.ID)
-						if err != nil {
-							fmt.Println("error sending message:", err)
-							return
-						}
-						return
-					}
-				}
-			} else {
-				if strings.HasPrefix(m.Content, commandPrefix+"emojiReaction") || strings.HasPrefix(m.Content, commandPrefix+"server") || strings.HasPrefix(m.Content, commandPrefix+"voice") || strings.HasPrefix(m.Content, commandPrefix+"message") || strings.HasPrefix(m.Content, commandPrefix+"addrole") {
-					err := s.ChannelMessageDelete(m.ChannelID, m.Message.ID)
-					if err != nil {
-						fmt.Println("error sending message:", err)
-						return
-					}
-					guild, err := sess.Guild(m.GuildID)
-					if err != nil {
-						fmt.Println("Помилка при отриманні інформації про сервер:", err)
-						return
-					}
-					channel, err := s.UserChannelCreate(m.Author.ID)
-					embed := &discordgo.MessageEmbed{
-						Title: "Помилка",
-						Description: fmt.Sprintf(
-							">>> Ви не маєте права викликати цю команду! \n Якщо виникла помилка, зверніться до адміністрації серверу: "+"`%s`",
-							guild.Name,
-						),
-						Thumbnail: &discordgo.MessageEmbedThumbnail{
-							URL: "https://i.imgur.com/BKYSMoP.png",
-						},
-						Color: 0xf5b507, // Колір (у форматі HEX)
-					}
-					_, err = s.ChannelMessageSendEmbed(channel.ID, embed)
-					if err != nil {
-						fmt.Println("error sending message:", err)
-						return
-					}
-					return
-				}
-			}
-		}
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		ChannelLogsMessages := section.Key("ChannelLogsMessages").String()
-		ChannelLogsVoice := section.Key("ChannelLogsVoice").String()
-		ChannelLogsServer := section.Key("ChannelLogsServer").String()
-
+		section := cfg.Section("LOGS")
+		ChannelLogsMessages := section.Key("CHANNEL_LOGS_MESSAGE_ID").String()
+		ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
+		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
+		if len(ChannelLogsMessages) != 19 {
+			return
+		}
+		if len(ChannelLogsVoice) != 19 {
+			return
+		}
+		if len(ChannelLogsServer) != 19 {
+			return
+		}
 		if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsVoice || m.ChannelID == ChannelLogsServer {
 			return
 		} else {
@@ -212,11 +251,16 @@ func main() {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		MessageReactionAddID := section.Key("MessageReactionAddID").String()
-		EmojiReaction := section.Key("EmojiReaction").String()
-		addrolelvlID := section.Key("AddRolelvlID").String()
-		addroleID := section.Key("AddRoleID").String()
+		section := cfg.Section("EMOJI_REACTIONS")
+		MessageReactionAddID := section.Key("MESSAGE_REACTION_ID").String()
+		EmojiReaction := section.Key("EMOJI_REACTION").String()
+		addroleID := section.Key("ROLE_ADD_ID").String()
+		if len(MessageReactionAddID) != 19 {
+			return
+		}
+		if len(addroleID) != 19 {
+			return
+		}
 		if m.MessageID == MessageReactionAddID {
 			// Перевіряємо, чи це потрібна реакція (emoji)
 			if m.Emoji.Name == EmojiReaction {
@@ -231,7 +275,7 @@ func main() {
 				// Перевіряємо, чи користувач має певну роль
 				hasRole := false
 				for _, role := range member.Roles {
-					if role == addrolelvlID {
+					if role == addroleID {
 						hasRole = true
 						break
 					}
@@ -269,11 +313,6 @@ func main() {
 						return
 					}
 				} else {
-					err = s.GuildMemberRoleAdd(m.GuildID, userID, addrolelvlID)
-					if err != nil {
-						fmt.Println("error adding role,", err)
-						return
-					}
 					err = s.GuildMemberRoleAdd(m.GuildID, userID, addroleID)
 					if err != nil {
 						fmt.Println("error adding role,", err)
@@ -285,19 +324,28 @@ func main() {
 
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) {
+		if m.Author == nil || m.Author.Bot {
+			return
+		}
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		ChannelLogsMessages := section.Key("ChannelLogsMessages").String()
-		ChannelLogsVoice := section.Key("ChannelLogsVoice").String()
-		ChannelLogsServer := section.Key("ChannelLogsServer").String()
-		if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsServer || m.ChannelID == ChannelLogsVoice {
+		section := cfg.Section("LOGS")
+		ChannelLogsMessages := section.Key("CHANNEL_LOGS_MESSAGE_ID").String()
+		ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
+		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
+		if len(ChannelLogsMessages) != 19 {
 			return
 		}
-		if m.Author == nil || m.Author.Bot {
+		if len(ChannelLogsVoice) != 19 {
+			return
+		}
+		if len(ChannelLogsServer) != 19 {
+			return
+		}
+		if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsServer || m.ChannelID == ChannelLogsVoice {
 			return
 		}
 		currentTime := time.Now()
@@ -381,10 +429,19 @@ func main() {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		ChannelLogsMessages := section.Key("ChannelLogsMessages").String()
-		ChannelLogsVoice := section.Key("ChannelLogsVoice").String()
-		ChannelLogsServer := section.Key("ChannelLogsServer").String()
+		section := cfg.Section("LOGS")
+		ChannelLogsMessages := section.Key("CHANNEL_LOGS_MESSAGE_ID").String()
+		ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
+		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
+		if len(ChannelLogsMessages) != 19 {
+			return
+		}
+		if len(ChannelLogsVoice) != 19 {
+			return
+		}
+		if len(ChannelLogsServer) != 19 {
+			return
+		}
 		if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsServer || m.ChannelID == ChannelLogsVoice {
 			return
 		}
@@ -458,78 +515,29 @@ func main() {
 		file.Close()
 	})
 	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
+		if userChannels[vs.UserID] == vs.ChannelID {
+			return
+		}
 		cfg, err := ini.Load("servers/" + vs.GuildID + "/config.ini")
 		if err != nil {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		ChannelLogsVoice := section.Key("ChannelLogsVoice").String()
-		if userChannels[vs.UserID] == vs.ChannelID {
+		section := cfg.Section("LOGS")
+		ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
+		if len(ChannelLogsVoice) != 19 {
 			return
 		}
 		currentTime := time.Now()
 		stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
-		if vs.ChannelID == "" {
-			channelID := userChannels[vs.UserID]
-			embed1 := &discordgo.MessageEmbed{
-				Title: "Користувач вийшов з голосового каналу",
-				Fields: []*discordgo.MessageEmbedField{
-					{
-						Name:   "**Канал**",
-						Value:  "<#" + channelID + ">",
-						Inline: true,
-					},
-					{
-						Name:   "**Користувач**",
-						Value:  "<@" + vs.UserID + ">",
-						Inline: true,
-					},
-				},
-				Thumbnail: &discordgo.MessageEmbedThumbnail{
-					URL: "https://i.imgur.com/K6wF5SK.png",
-				},
-				Color:     0xed5f5f, // Колір (у форматі HEX)
-				Timestamp: stringTime,
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    vs.Member.User.Username,
-					IconURL: vs.Member.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
-				},
-			}
-			_, err = s.ChannelMessageSendEmbed(ChannelLogsVoice, embed1)
-			if err != nil {
-				fmt.Println("error getting member:", err)
+
+		if vs.VoiceState.ChannelID != "" {
+			if userChannels[vs.UserID] == vs.ChannelID {
 				return
-			}
-			delete(userChannels, vs.UserID)
-		} else {
-			embed2 := &discordgo.MessageEmbed{
-				Title: "Користувач зайшов в голосовий канал",
-				Fields: []*discordgo.MessageEmbedField{
-					{
-						Name:   "**Канал**",
-						Value:  "<#" + vs.ChannelID + ">",
-						Inline: true,
-					},
-					{
-						Name:   "**Користувач**",
-						Value:  "<@" + vs.UserID + ">",
-						Inline: true,
-					},
-				},
-				Thumbnail: &discordgo.MessageEmbedThumbnail{
-					URL: "https://i.imgur.com/HfR2ekf.png",
-				},
-				Color:     0x5fed80, // Колір (у форматі HEX)
-				Timestamp: stringTime,
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    vs.Member.User.Username,
-					IconURL: vs.Member.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
-				},
 			}
 			if len(userChannels[vs.UserID]) > 10 {
 				if vs.ChannelID != userChannels[vs.UserID] {
-					embed3 := &discordgo.MessageEmbed{
+					embed_run := &discordgo.MessageEmbed{
 						Title: "Користувач перейшов в інший голосовий канал",
 						Fields: []*discordgo.MessageEmbedField{
 							{
@@ -558,20 +566,77 @@ func main() {
 							IconURL: vs.Member.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
 						},
 					}
-					_, err = s.ChannelMessageSendEmbed(ChannelLogsVoice, embed3)
+					_, err = s.ChannelMessageSendEmbed(ChannelLogsVoice, embed_run)
 					if err != nil {
 						fmt.Println("error getting member:", err)
 						return
 					}
+					userChannels[vs.UserID] = vs.ChannelID
 					return
 				}
 			}
-			_, err = s.ChannelMessageSendEmbed(ChannelLogsVoice, embed2)
+			embed_join := &discordgo.MessageEmbed{
+				Title: "Користувач зайшов в голосовий канал",
+				Fields: []*discordgo.MessageEmbedField{
+					{
+						Name:   "**Канал**",
+						Value:  "<#" + vs.ChannelID + ">",
+						Inline: true,
+					},
+					{
+						Name:   "**Користувач**",
+						Value:  "<@" + vs.UserID + ">",
+						Inline: true,
+					},
+				},
+				Thumbnail: &discordgo.MessageEmbedThumbnail{
+					URL: "https://i.imgur.com/HfR2ekf.png",
+				},
+				Color:     0x5fed80, // Колір (у форматі HEX)
+				Timestamp: stringTime,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    vs.Member.User.Username,
+					IconURL: vs.Member.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
+				},
+			}
+			_, err = s.ChannelMessageSendEmbed(ChannelLogsVoice, embed_join)
 			if err != nil {
 				fmt.Println("error getting member:", err)
 				return
 			}
 			userChannels[vs.UserID] = vs.ChannelID
+		} else {
+			channelID := userChannels[vs.UserID]
+			embed_leave := &discordgo.MessageEmbed{
+				Title: "Користувач вийшов з голосового каналу",
+				Fields: []*discordgo.MessageEmbedField{
+					{
+						Name:   "**Канал**",
+						Value:  "<#" + channelID + ">",
+						Inline: true,
+					},
+					{
+						Name:   "**Користувач**",
+						Value:  "<@" + vs.UserID + ">",
+						Inline: true,
+					},
+				},
+				Thumbnail: &discordgo.MessageEmbedThumbnail{
+					URL: "https://i.imgur.com/K6wF5SK.png",
+				},
+				Color:     0xed5f5f, // Колір (у форматі HEX)
+				Timestamp: stringTime,
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    vs.Member.User.Username,
+					IconURL: vs.Member.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
+				},
+			}
+			_, err = s.ChannelMessageSendEmbed(ChannelLogsVoice, embed_leave)
+			if err != nil {
+				fmt.Println("error getting member:", err)
+				return
+			}
+			delete(userChannels, vs.UserID)
 		}
 	})
 	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
@@ -580,8 +645,11 @@ func main() {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		ChannelLogsServer := section.Key("ChannelLogsServer").String()
+		section := cfg.Section("LOGS")
+		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
+		if len(ChannelLogsServer) != 19 {
+			return
+		}
 
 		currentTime := time.Now()
 		userTimeJoin[gma.User.ID] = strconv.FormatInt(currentTime.Unix(), 10)
@@ -622,8 +690,11 @@ func main() {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		ChannelLogsServer := section.Key("ChannelLogsServer").String()
+		section := cfg.Section("LOGS")
+		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
+		if len(ChannelLogsServer) != 19 {
+			return
+		}
 		currentTime := time.Now()
 		stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 		userTime, err := strconv.ParseInt(userTimeJoin[gmr.User.ID], 10, 64)
@@ -668,8 +739,11 @@ func main() {
 			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
 			return
 		}
-		section := cfg.Section("default")
-		ChannelLogsServer := section.Key("ChannelLogsServer").String()
+		section := cfg.Section("LOGS")
+		ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
+		if len(ChannelLogsServer) != 19 {
+			return
+		}
 		currentTime := time.Now()
 		stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
