@@ -20,7 +20,7 @@ import (
 )
 
 func main() {
-	const Token = "MTE2MDE3NTg5NTQ3NTEzODYxMQ.GfSoxQ.Q1jTHNBHIIQcPAL_pnUmnih8OecIC2sZIp9JvU"
+	const Token = ""
 	const commandPrefix = "!"
 	var userChannels map[string]string
 	userChannels = make(map[string]string)
