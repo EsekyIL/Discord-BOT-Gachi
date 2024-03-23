@@ -64,7 +64,7 @@ func registerCommands(sess *discordgo.Session) {
 			},
 		},
 	}
-	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &cmdMenuLogs) // Створення і відправка команд
+	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &cmdMenuLogs) // Створення і відправка команд !
 	if err != nil {
 		boldRed.Println("Error creating application command,", err)
 		return

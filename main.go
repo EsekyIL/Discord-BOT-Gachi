@@ -44,7 +44,7 @@ func main() {
 			whiteBackground.Printf("🎉 Урааа. %v добавили бота на свій сервер! 🎉\n", g.Guild.Name)
 		}
 	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль відстеження повідомлень, а також запис їх у log
+	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль відстеження повідомлень, а також запис їх у log!
 		if m.Author.Bot {
 			return
 		}
