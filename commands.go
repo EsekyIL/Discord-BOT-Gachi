@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"runtime"
 	"time"
 
@@ -79,9 +78,9 @@ func registerCommands(sess *discordgo.Session) {
 			return
 		}
 		switch {
-		case ic.ApplicationCommandData().Name == "menu":
-			txt := ic.ApplicationCommandData().Options[0].ChannelValue(s)
-			fmt.Println("ID обраного каналу:", txt.ID)
+		//	case ic.ApplicationCommandData().Name == "temp":  Видалення команд
+		//		idcmd := ic.ApplicationCommandData().ID
+		//		s.ApplicationCommandDelete("1160175895475138611", "", idcmd)
 		case ic.ApplicationCommandData().Name == "logs":
 			temp := ic.ApplicationCommandData().Options[0].ChannelValue(s)
 			channelID_M := temp.ID
