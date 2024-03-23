@@ -48,6 +48,7 @@ func main() {
 		if m.Author.Bot {
 			return
 		}
+
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
 			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)

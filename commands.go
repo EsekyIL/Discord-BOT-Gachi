@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"runtime"
 	"time"
 
@@ -13,31 +14,31 @@ func registerCommands(sess *discordgo.Session) {
 	red := color.New(color.FgRed)
 	boldRed := red.Add(color.Bold)
 
-	cmdLogs := &discordgo.ApplicationCommand{ // Створення тіла команди
+	cmdMenuLogs := discordgo.ApplicationCommand{
 		Name:        "logs",
-		Description: "Налаштування логування на сервері",
-		Type:        discordgo.ChatApplicationCommand,
+		Description: "Випадаюче меню з каналами",
 		Options: []*discordgo.ApplicationCommandOption{
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        7, // Числове значення для ApplicationCommandOptionTypeChannel
 				Name:        "message_id_channel",
 				Description: "Введіть ID каналу для логування повідомлень",
 				Required:    true,
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        7,
 				Name:        "voice_id_channel",
 				Description: "Введіть ID каналу для логування голосових каналів",
 				Required:    true,
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        7,
 				Name:        "server_id_channel",
 				Description: "Введіть ID каналу для логування серверу (входу, виходу, банів)",
 				Required:    true,
 			},
 		},
 	}
+
 	cmdEmojiReactions := &discordgo.ApplicationCommand{
 		Name:        "reaction",
 		Description: "Видача ролі на сервері по emoji",
@@ -63,7 +64,7 @@ func registerCommands(sess *discordgo.Session) {
 			},
 		},
 	}
-	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", cmdLogs) // Створення і відправка команд
+	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &cmdMenuLogs) // Створення і відправка команд
 	if err != nil {
 		boldRed.Println("Error creating application command,", err)
 		return
@@ -78,39 +79,16 @@ func registerCommands(sess *discordgo.Session) {
 			return
 		}
 		switch {
+		case ic.ApplicationCommandData().Name == "menu":
+			txt := ic.ApplicationCommandData().Options[0].ChannelValue(s)
+			fmt.Println("ID обраного каналу:", txt.ID)
 		case ic.ApplicationCommandData().Name == "logs":
-			channelID_M := ic.ApplicationCommandData().Options[0].StringValue()
-			channelID_V := ic.ApplicationCommandData().Options[1].StringValue()
-			channelID_S := ic.ApplicationCommandData().Options[2].StringValue()
-			switch {
-			case len(channelID_M) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина першої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			case len(channelID_V) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина другої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			case len(channelID_S) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина третьої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			}
+			temp := ic.ApplicationCommandData().Options[0].ChannelValue(s)
+			channelID_M := temp.ID
+			temp = ic.ApplicationCommandData().Options[1].ChannelValue(s)
+			channelID_V := temp.ID
+			temp = ic.ApplicationCommandData().Options[2].ChannelValue(s)
+			channelID_S := temp.ID
 
 			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
 			if err != nil {
