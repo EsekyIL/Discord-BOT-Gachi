@@ -15,255 +15,34 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
+	"github.com/fatih/color"
 	"gopkg.in/ini.v1"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
+// Колір помилок commands - червоний
+
 func main() {
-	const Token = ""
-	const commandPrefix = "!"
-	var userChannels map[string]string
-	userChannels = make(map[string]string)
-	var userTimeJoin map[string]string
-	userTimeJoin = make(map[string]string)
-	var userTimeJoinVoice map[string]string
-	userTimeJoinVoice = make(map[string]string)
+	const Token = "MTE2MDE3NTg5NTQ3NTEzODYxMQ.GLxSos.THu0Vl5ZGXPRQN3MrOIMP9fgZqumGvQyRY3ORs"
+	userChannels := make(map[string]string)
+	userTimeJoin := make(map[string]string)
+	userTimeJoinVoice := make(map[string]string)
 	sess, err := discordgo.New("Bot " + Token) // Відкриття сессії з ботом
 	if err != nil {
 		log.Fatal(err)
 	}
-	cmdLogs := &discordgo.ApplicationCommand{ // Створення тіла команди
-		Name:        "logs",
-		Description: "Налаштування логування на сервері",
-		Type:        discordgo.ChatApplicationCommand,
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "message_id_channel",
-				Description: "Введіть ID каналу для логування повідомлень",
-				Required:    true,
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "voice_id_channel",
-				Description: "Введіть ID каналу для логування голосових каналів",
-				Required:    true,
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "server_id_channel",
-				Description: "Введіть ID каналу для логування серверу (входу, виходу, банів)",
-				Required:    true,
-			},
-		},
-	}
-	cmdEmojiReactions := &discordgo.ApplicationCommand{
-		Name:        "reaction",
-		Description: "Видача ролі на сервері по emoji",
-		Type:        discordgo.ChatApplicationCommand,
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "message_id",
-				Description: "Введіть ID повідомлення на якому будуть Emoji",
-				Required:    true,
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "emoji",
-				Description: "Введіть Emoji яке мають натискати користувачі",
-				Required:    true,
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "role_id",
-				Description: "Введіть ID ролі, яка буде видаватись користувачам",
-				Required:    true,
-			},
-		},
-	}
-	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdLogs) // Створення і відправка команд
-	if err != nil {
-		fmt.Println("Error creating application command,", err)
-		return
-	}
-	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdEmojiReactions)
-	if err != nil {
-		fmt.Println("Error creating application command,", err)
-		return
-	}
-	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) { // Модуль зчитування команд та збереження результату в файл
-		if ic.Type == discordgo.InteractionMessageComponent {
-			return
-		}
-		switch {
-		case ic.ApplicationCommandData().Name == "logs":
-			channelID_M := ic.ApplicationCommandData().Options[0].StringValue()
-			channelID_V := ic.ApplicationCommandData().Options[1].StringValue()
-			channelID_S := ic.ApplicationCommandData().Options[2].StringValue()
-			switch {
-			case len(channelID_M) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина першої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			case len(channelID_V) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина другої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			case len(channelID_S) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина третьої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			}
-
-			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "Тепер ви можете користуватись логуванням бота!",
-					Flags:   1 << 6,
-				},
-			})
-			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
-				return
-			}
-			section := cfg.Section("LOGS")
-			section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(channelID_M)
-			section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(channelID_V)
-			section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(channelID_S)
-			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				fmt.Println("Помилка при збереженні конфігураційного файлу:", err)
-				return
-			}
-		case ic.ApplicationCommandData().Name == "reaction":
-			message_ID := ic.ApplicationCommandData().Options[0].StringValue()
-			emoji_string := ic.ApplicationCommandData().Options[1].StringValue()
-			role_ID := ic.ApplicationCommandData().Options[2].StringValue()
-
-			switch {
-			case len(message_ID) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина першої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			case len(emoji_string) > 10:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина другої опції має бути не більше 10 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			case len(role_ID) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина третьої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			}
-			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "Тепер ви можете користуватись видачею ролей через Emoji!",
-					Flags:   1 << 6,
-				},
-			})
-			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
-				return
-			}
-			section := cfg.Section("EMOJI_REACTIONS")
-			section.Key("MESSAGE_REACTION_ID").SetValue(message_ID)
-			section.Key("EMOJI_REACTION").SetValue(emoji_string)
-			section.Key("ROLE_ADD_ID").SetValue(role_ID)
-			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				fmt.Println("Помилка при збереженні конфігураційного файлу:", err)
-				return
-			}
-		}
-
-	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.GuildCreate) { // Модуль створення папки серверу, конфігураційного файлу а також лога повідомлень
+	registerCommands(sess)
+	sess.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
 		basePath := "./servers"
-		folderName := m.Guild.ID
+		folderName := g.Guild.ID
 		folderPath := filepath.Join(basePath, folderName)
-		_, err = os.Stat(folderPath)
+		_, err := os.Stat(folderPath)
 		if os.IsNotExist(err) {
-			err = os.Mkdir(folderPath, 0755)
-		} else {
-			return
+			registerServer(s, g)
+			red := color.New(color.FgRed)
+			boldRed := red.Add(color.Bold)
+			whiteBackground := boldRed.Add(color.BgCyan)
+			whiteBackground.Printf("🎉 Урааа. %v добавили бота на свій сервер! 🎉\n", g.Guild.Name)
 		}
-		directoryPath := filepath.Join(basePath, folderName)
-		filePath := filepath.Join(directoryPath, "config.ini")
-		cfg := ini.Empty()
-		section := cfg.Section("GUILD")
-		section.Key("GUILD_NAME").SetValue(m.Guild.Name)
-		section.Key("GUILD_ID").SetValue(m.Guild.ID)
-		section.Key("GUILD_REGION").SetValue(m.Guild.Region)
-		section = cfg.Section("LOGS")
-		section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue("")
-		section.Key("CHANNEL_LOGS_VOICE_ID").SetValue("")
-		section.Key("CHANNEL_LOGS_SERVER_ID").SetValue("")
-		section = cfg.Section("EMOJI_REACTIONS")
-		section.Key("MESSAGE_REACTION_ID").SetValue("")
-		section.Key("EMOJI_REACTION").SetValue("")
-		section.Key("ROLE_ADD_ID").SetValue("")
-		section = cfg.Section("LVL_EXP_USERS")
-		members, err := s.GuildMembers(m.Guild.ID, "", 1000)
-		if err != nil {
-			fmt.Println("Помилка отримання учасників сервера:", err)
-			return
-		}
-		for _, member := range members {
-			switch {
-			case member.User.ID == "1160175895475138611":
-				continue
-			case len(member.Roles) == 0:
-				continue
-			}
-			section.Key(member.User.ID).SetValue("0")
-		}
-		err = cfg.SaveTo(filePath)
-		if err != nil {
-			fmt.Println("Помилка при збереженні у файл:", err)
-			return
-		}
-		var logger *log.Logger
-		l := &lumberjack.Logger{
-			Filename:   "servers/" + m.Guild.ID + "/message.log",
-			MaxSize:    8192, // мегабайти
-			MaxBackups: 1,
-			MaxAge:     30, // дні
-		}
-		logger = log.New(l, "", log.LstdFlags)
-		logger.Println("Привіт, цей бот був написаний ручками 𝕙𝕥𝕥𝕡𝕤://𝕥.𝕞𝕖/𝔼𝕤𝕖𝕜𝕪𝕚𝕝 ♥")
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль відстеження повідомлень, а також запис їх у log
 		if m.Author.Bot {
@@ -271,7 +50,9 @@ func main() {
 		}
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("LOGS")
@@ -289,82 +70,14 @@ func main() {
 			defer file.Close()
 			logger := log.New(file, "", log.LstdFlags)
 			logger.Println("Text message: " + m.Content + " | " + "Nickname: " + m.Author.Username + " | " + "ID: " + m.Author.ID + " | " + "messageID: " + m.Message.ID + " | " + "ChannelID: " + m.ChannelID)
-			if len(m.Content) >= 3 && len(m.Content) <= 10 {
-				var EXP uint32
-				section = cfg.Section("LVL_EXP_USERS")
-				valueStr := section.Key(m.Author.ID).String()
-				parsedEXP, err := strconv.ParseUint(valueStr, 10, 32)
-				if err != nil {
-					fmt.Println("Помилка конвертації значення рядка в uint32:", err)
-					// Обробка помилки, якщо потрібно
-					return
-				}
-				EXP = uint32(parsedEXP)
-				EXP += 2
-				EXPStr := strconv.Itoa(int(EXP))
-				section.Key(m.Author.ID).SetValue(EXPStr)
-				basePath := "./servers"
-				folderName := m.GuildID
-				directoryPath := filepath.Join(basePath, folderName)
-				filePath = filepath.Join(directoryPath, "config.ini")
-				err = cfg.SaveTo(filePath)
-				if err != nil {
-					fmt.Println("Помилка при збереженні у файл:", err)
-					return
-				}
-			} else if len(m.Content) > 10 && len(m.Content) < 20 {
-				var EXP uint32
-				section = cfg.Section("LVL_EXP_USERS")
-				valueStr := section.Key(m.Author.ID).String()
-				parsedEXP, err := strconv.ParseUint(valueStr, 10, 32)
-				if err != nil {
-					fmt.Println("Помилка конвертації значення рядка в uint32:", err)
-					// Обробка помилки, якщо потрібно
-					return
-				}
-				EXP = uint32(parsedEXP)
-				EXP += 5
-				EXPStr := strconv.Itoa(int(EXP))
-				section.Key(m.Author.ID).SetValue(EXPStr)
-				basePath := "./servers"
-				folderName := m.GuildID
-				directoryPath := filepath.Join(basePath, folderName)
-				filePath = filepath.Join(directoryPath, "config.ini")
-				err = cfg.SaveTo(filePath)
-				if err != nil {
-					fmt.Println("Помилка при збереженні у файл:", err)
-					return
-				}
-			} else if len(m.Content) >= 20 {
-				var EXP uint32
-				section = cfg.Section("LVL_EXP_USERS")
-				valueStr := section.Key(m.Author.ID).String()
-				parsedEXP, err := strconv.ParseUint(valueStr, 10, 32)
-				if err != nil {
-					fmt.Println("Помилка конвертації значення рядка в uint32:", err)
-					// Обробка помилки, якщо потрібно
-					return
-				}
-				EXP = uint32(parsedEXP)
-				EXP += 10
-				EXPStr := strconv.Itoa(int(EXP))
-				section.Key(m.Author.ID).SetValue(EXPStr)
-				basePath := "./servers"
-				folderName := m.GuildID
-				directoryPath := filepath.Join(basePath, folderName)
-				filePath = filepath.Join(directoryPath, "config.ini")
-				err = cfg.SaveTo(filePath)
-				if err != nil {
-					fmt.Println("Помилка при збереженні у файл:", err)
-					return
-				}
-			}
 		}
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) { // Модуль додавання ролі по реакції на повідомлення
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("EMOJI_REACTIONS")
@@ -456,7 +169,9 @@ func main() {
 		}
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("LOGS")
@@ -552,7 +267,9 @@ func main() {
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) { // Модуль логування видаленого повідомлення
 		cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("LOGS")
@@ -645,7 +362,9 @@ func main() {
 		}
 		cfg, err := ini.Load("servers/" + vs.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("LOGS")
@@ -803,7 +522,9 @@ func main() {
 	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) { // Модуль логування надходження користувачів на сервер
 		cfg, err := ini.Load("servers/" + gma.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("LOGS")
@@ -848,7 +569,9 @@ func main() {
 	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) { // Модуль логування виходу користувачів з серверу
 		cfg, err := ini.Load("servers/" + gmr.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("LOGS")
@@ -897,7 +620,9 @@ func main() {
 	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildBanAdd) { // Модуль логування бану користувачів на сервер
 		cfg, err := ini.Load("servers/" + gmr.GuildID + "/config.ini")
 		if err != nil {
-			fmt.Println("Помилка при завантаженні конфігураційного файлу:", err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
 			return
 		}
 		section := cfg.Section("LOGS")

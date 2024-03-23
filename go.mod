@@ -4,6 +4,7 @@ go 1.21.2
 
 require (
 	github.com/bwmarrin/discordgo v0.27.1 // indirect
+	github.com/fatih/color v1.16.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/labstack/echo/v4 v4.11.3 // indirect
 	github.com/labstack/gommon v0.4.1 // indirect
