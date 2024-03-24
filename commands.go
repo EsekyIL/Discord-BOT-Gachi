@@ -10,9 +10,18 @@ import (
 	"gopkg.in/ini.v1"
 )
 
-func registerCommands(sess *discordgo.Session) {
+func ErrorWriter(err error, text string, lineNumber int) {
+
 	red := color.New(color.FgRed)
 	boldRed := red.Add(color.Bold)
+
+	currentTime := time.Now()
+	timestamp := currentTime.Format("2006-01-02 15:04:05")
+
+	boldRed.Printf("%s - [%d.line] - %s: %s\n", timestamp, lineNumber, text, err)
+}
+
+func registerCommands(sess *discordgo.Session) {
 
 	cmdMenuLogs := discordgo.ApplicationCommand{
 		Name:        "logs",
@@ -66,12 +75,14 @@ func registerCommands(sess *discordgo.Session) {
 	}
 	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &cmdMenuLogs) // Створення і відправка команд !
 	if err != nil {
-		boldRed.Println("Error creating application command,", err)
+		_, _, lineNumber, _ := runtime.Caller(0)
+		ErrorWriter(err, "Помилка створення команди програми", lineNumber)
 		return
 	}
 	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdEmojiReactions)
 	if err != nil {
-		boldRed.Println("Error creating application command,", err)
+		_, _, lineNumber, _ := runtime.Caller(0)
+		ErrorWriter(err, "Помилка створення команди програми", lineNumber)
 		return
 	}
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) { // Модуль зчитування команд та збереження результату в файл
@@ -93,9 +104,7 @@ func registerCommands(sess *discordgo.Session) {
 			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
 			if err != nil {
 				_, _, lineNumber, _ := runtime.Caller(0)
-				currentTime := time.Now()
-				timestamp := currentTime.Format("2006-01-02 15:04:05")
-				boldRed.Println(timestamp, " Помилка при завантаженні конфігураційного файлу: [", lineNumber, "] ", err)
+				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
 				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -111,7 +120,8 @@ func registerCommands(sess *discordgo.Session) {
 			section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(channelID_S)
 			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
 			if err != nil {
-				boldRed.Println("Помилка при завантаженні конфігураційного файлу: ", err)
+				_, _, lineNumber, _ := runtime.Caller(0)
+				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
 				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -155,7 +165,8 @@ func registerCommands(sess *discordgo.Session) {
 			}
 			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
 			if err != nil {
-				boldRed.Println("Помилка при завантаженні конфігураційного файлу: ", err)
+				_, _, lineNumber, _ := runtime.Caller(0)
+				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
 				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -171,7 +182,8 @@ func registerCommands(sess *discordgo.Session) {
 			section.Key("ROLE_ADD_ID").SetValue(role.ID)
 			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
 			if err != nil {
-				boldRed.Println("Помилка при збереженні конфігураційного файлу: ", err)
+				_, _, lineNumber, _ := runtime.Caller(0)
+				ErrorWriter(err, "Помилка при збереженні конфігураційного файлу", lineNumber)
 				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
@@ -195,9 +207,8 @@ func registerCommands(sess *discordgo.Session) {
 func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 	cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
 	if err != nil {
-		errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
-		writer := color.New(color.FgBlue, color.Bold).SprintFunc()
-		fmt.Println(writer(errorMsg))
+		_, _, lineNumber, _ := runtime.Caller(0)
+		ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
 		return
 	}
 	section := cfg.Section("EMOJI_REACTIONS")
@@ -217,7 +228,8 @@ func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 			userID := m.UserID
 			member, err := s.GuildMember(m.GuildID, userID)
 			if err != nil {
-				fmt.Println("error getting member:", err)
+				_, _, lineNumber, _ := runtime.Caller(0)
+				ErrorWriter(err, "Помилка отримання учасника", lineNumber)
 				return
 			}
 
@@ -233,14 +245,16 @@ func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 				// Користувач має певну роль, надсилаємо йому приватне повідомлення
 				guild, err := s.Guild(m.GuildID)
 				if err != nil {
-					fmt.Println("Помилка при отриманні інформації про сервер:", err)
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при отриманні інформації про сервер", lineNumber)
 					return
 				}
 				currentTime := time.Now()
 				stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 				channel, err := s.UserChannelCreate(userID)
 				if err != nil {
-					fmt.Println("error creating channel:", err)
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка створення каналу", lineNumber)
 					return
 				}
 				// Надсилання приватного повідомлення
@@ -258,13 +272,15 @@ func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 				}
 				_, err = s.ChannelMessageSendEmbed(channel.ID, embed)
 				if err != nil {
-					fmt.Println("error sending message:", err)
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка надсилання повідомлення", lineNumber)
 					return
 				}
 			} else {
 				err = s.GuildMemberRoleAdd(m.GuildID, userID, addroleID)
 				if err != nil {
-					fmt.Println("error adding role,", err)
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка додавання ролі", lineNumber)
 					return
 				}
 			}
