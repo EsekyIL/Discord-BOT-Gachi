@@ -23,6 +23,14 @@ func ErrorWriter(err error, text string, lineNumber int) {
 
 func registerCommands(sess *discordgo.Session) {
 
+	response := &discordgo.InteractionResponse{
+		Type: discordgo.InteractionResponseChannelMessageWithSource,
+		Data: &discordgo.InteractionResponseData{
+			Content: "⛔ Виникла помилка. 🔧 Зверніться у підтримку бота.",
+			Flags:   1 << 6,
+		},
+	}
+
 	cmdMenuLogs := discordgo.ApplicationCommand{
 		Name:        "logs",
 		Description: "Випадаюче меню з каналами",
@@ -105,13 +113,7 @@ func registerCommands(sess *discordgo.Session) {
 			if err != nil {
 				_, _, lineNumber, _ := runtime.Caller(0)
 				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⛔ Виникла помилка. 🔧 Зверніться у підтримку бота.",
-						Flags:   1 << 6,
-					},
-				})
+				s.InteractionRespond(ic.Interaction, response)
 				return
 			}
 			section := cfg.Section("LOGS")
@@ -122,13 +124,7 @@ func registerCommands(sess *discordgo.Session) {
 			if err != nil {
 				_, _, lineNumber, _ := runtime.Caller(0)
 				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⛔ Виникла помилка. 🔧 Зверніться у підтримку бота.",
-						Flags:   1 << 6,
-					},
-				})
+				s.InteractionRespond(ic.Interaction, response)
 				return
 			}
 			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
@@ -167,13 +163,7 @@ func registerCommands(sess *discordgo.Session) {
 			if err != nil {
 				_, _, lineNumber, _ := runtime.Caller(0)
 				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⛔ Виникла помилка. 🔧 Зверніться у підтримку бота.",
-						Flags:   1 << 6,
-					},
-				})
+				s.InteractionRespond(ic.Interaction, response)
 				return
 			}
 			section := cfg.Section("EMOJI_REACTIONS")
@@ -184,13 +174,7 @@ func registerCommands(sess *discordgo.Session) {
 			if err != nil {
 				_, _, lineNumber, _ := runtime.Caller(0)
 				ErrorWriter(err, "Помилка при збереженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⛔ Виникла помилка. 🔧 Зверніться у підтримку бота.",
-						Flags:   1 << 6,
-					},
-				})
+				s.InteractionRespond(ic.Interaction, response)
 				return
 			}
 			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{

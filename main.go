@@ -12,7 +12,7 @@ import (
 	"github.com/fatih/color"
 )
 
-// Колір помилок commands - червоний
+// Колір помилок commands.go - червоний
 
 func main() {
 	const Token = "MTE2MDE3NTg5NTQ3NTEzODYxMQ.GLxSos.THu0Vl5ZGXPRQN3MrOIMP9fgZqumGvQyRY3ORs"
