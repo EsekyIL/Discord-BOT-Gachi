@@ -33,7 +33,8 @@ func main() {
 			red := color.New(color.FgRed)
 			boldRed := red.Add(color.Bold)
 			whiteBackground := boldRed.Add(color.BgCyan)
-			whiteBackground.Printf("🎉 Урааа. %v добавили бота на свій сервер! 🎉\n", g.Guild.Name)
+			whiteBackground.Printf("🎉 Урааа. %v добавили бота на свій сервер! 🎉", g.Guild.Name)
+			print("\n")
 		}
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль відстеження повідомлень, а також запис їх у log!
