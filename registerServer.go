@@ -12,7 +12,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-func registerServer(s *discordgo.Session, g *discordgo.GuildCreate) { // Модуль створення папки серверу, конфігураційного файлу а також лога повідомлень
+func registerServer(g *discordgo.GuildCreate) { // Модуль створення папки серверу, конфігураційного файлу а також лога повідомлень
 	basePath := "./servers"
 	folderName := g.Guild.ID
 	folderPath := filepath.Join(basePath, folderName)
@@ -46,21 +46,6 @@ func registerServer(s *discordgo.Session, g *discordgo.GuildCreate) { // Мод�
 	section.Key("MESSAGE_REACTION_ID").SetValue("")
 	section.Key("EMOJI_REACTION").SetValue("")
 	section.Key("ROLE_ADD_ID").SetValue("")
-	section = cfg.Section("LVL_EXP_USERS")
-	members, err := s.GuildMembers(g.Guild.ID, "", 1000)
-	if err != nil {
-		fmt.Println("Помилка отримання учасників сервера:", err)
-		return
-	}
-	for _, member := range members {
-		switch {
-		case member.User.ID == "1160175895475138611":
-			continue
-		case len(member.Roles) == 0:
-			continue
-		}
-		section.Key(member.User.ID).SetValue("0")
-	}
 	err = cfg.SaveTo(filePath)
 	if err != nil {
 		errorMsg := fmt.Sprintf("Помилка при збереженні у файл: %v", err)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"time"
 
@@ -266,17 +265,6 @@ func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
 				err = s.GuildMemberRoleAdd(m.GuildID, userID, addroleID)
 				if err != nil {
 					fmt.Println("error adding role,", err)
-					return
-				}
-				basePath := "./servers"
-				folderName := m.GuildID
-				directoryPath := filepath.Join(basePath, folderName)
-				filePath := filepath.Join(directoryPath, "config.ini")
-				section = cfg.Section("LVL_EXP_USERS")
-				section.Key(m.UserID).SetValue("0")
-				err = cfg.SaveTo(filePath)
-				if err != nil {
-					fmt.Println("Помилка при збереженні у файл:", err)
 					return
 				}
 			}

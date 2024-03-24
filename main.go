@@ -29,7 +29,7 @@ func main() {
 		folderPath := filepath.Join(basePath, folderName)
 		_, err := os.Stat(folderPath)
 		if os.IsNotExist(err) {
-			registerServer(s, g)
+			registerServer(g)
 			red := color.New(color.FgRed)
 			boldRed := red.Add(color.Bold)
 			whiteBackground := boldRed.Add(color.BgCyan)
