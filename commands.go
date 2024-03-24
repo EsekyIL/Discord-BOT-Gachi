@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -56,7 +58,7 @@ func registerCommands(sess *discordgo.Session) {
 				Required:    true,
 			},
 			{
-				Type:        discordgo.ApplicationCommandOptionString,
+				Type:        8,
 				Name:        "role_id",
 				Description: "Введіть ID ролі, яка буде видаватись користувачам",
 				Required:    true,
@@ -130,7 +132,7 @@ func registerCommands(sess *discordgo.Session) {
 		case ic.ApplicationCommandData().Name == "reaction":
 			message_ID := ic.ApplicationCommandData().Options[0].StringValue()
 			emoji_string := ic.ApplicationCommandData().Options[1].StringValue()
-			role_ID := ic.ApplicationCommandData().Options[2].StringValue()
+			role := ic.ApplicationCommandData().Options[2].RoleValue(s, ic.GuildID)
 
 			switch {
 			case len(message_ID) > 19:
@@ -151,15 +153,6 @@ func registerCommands(sess *discordgo.Session) {
 					},
 				})
 				return
-			case len(role_ID) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина третьої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
 			}
 			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
 			if err != nil {
@@ -176,7 +169,7 @@ func registerCommands(sess *discordgo.Session) {
 			section := cfg.Section("EMOJI_REACTIONS")
 			section.Key("MESSAGE_REACTION_ID").SetValue(message_ID)
 			section.Key("EMOJI_REACTION").SetValue(emoji_string)
-			section.Key("ROLE_ADD_ID").SetValue(role_ID)
+			section.Key("ROLE_ADD_ID").SetValue(role.ID)
 			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
 			if err != nil {
 				boldRed.Println("Помилка при збереженні конфігураційного файлу: ", err)
@@ -199,4 +192,94 @@ func registerCommands(sess *discordgo.Session) {
 		}
 
 	})
+}
+func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
+	cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
+	if err != nil {
+		errorMsg := fmt.Sprintf("Помилка при завантаженні конфігураційного файлу: %v", err)
+		writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+		fmt.Println(writer(errorMsg))
+		return
+	}
+	section := cfg.Section("EMOJI_REACTIONS")
+	MessageReactionAddID := section.Key("MESSAGE_REACTION_ID").String()
+	EmojiReaction := section.Key("EMOJI_REACTION").String()
+	addroleID := section.Key("ROLE_ADD_ID").String()
+	switch {
+	case len(MessageReactionAddID) != 19:
+		return
+	case len(addroleID) != 19:
+		return
+	}
+	if m.MessageID == MessageReactionAddID {
+		// Перевіряємо, чи це потрібна реакція (emoji)
+		if m.Emoji.Name == EmojiReaction {
+			// Отримуємо ID користувача, який натиснув реакцію
+			userID := m.UserID
+			member, err := s.GuildMember(m.GuildID, userID)
+			if err != nil {
+				fmt.Println("error getting member:", err)
+				return
+			}
+
+			// Перевіряємо, чи користувач має певну роль
+			hasRole := false
+			for _, role := range member.Roles {
+				if role == addroleID {
+					hasRole = true
+					break
+				}
+			}
+			if hasRole {
+				// Користувач має певну роль, надсилаємо йому приватне повідомлення
+				guild, err := s.Guild(m.GuildID)
+				if err != nil {
+					fmt.Println("Помилка при отриманні інформації про сервер:", err)
+					return
+				}
+				currentTime := time.Now()
+				stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
+				channel, err := s.UserChannelCreate(userID)
+				if err != nil {
+					fmt.Println("error creating channel:", err)
+					return
+				}
+				// Надсилання приватного повідомлення
+				embed := &discordgo.MessageEmbed{
+					Title: "Помилка",
+					Description: fmt.Sprintf(
+						">>> Вам вже видана роль! Якщо ролі немає - зверніться до адміністрації серверу: "+"`%s`",
+						guild.Name,
+					),
+					Thumbnail: &discordgo.MessageEmbedThumbnail{
+						URL: "https://i.imgur.com/BKYSMoP.png",
+					},
+					Color:     0xf5b507, // Колір (у форматі HEX)
+					Timestamp: stringTime,
+				}
+				_, err = s.ChannelMessageSendEmbed(channel.ID, embed)
+				if err != nil {
+					fmt.Println("error sending message:", err)
+					return
+				}
+			} else {
+				err = s.GuildMemberRoleAdd(m.GuildID, userID, addroleID)
+				if err != nil {
+					fmt.Println("error adding role,", err)
+					return
+				}
+				basePath := "./servers"
+				folderName := m.GuildID
+				directoryPath := filepath.Join(basePath, folderName)
+				filePath := filepath.Join(directoryPath, "config.ini")
+				section = cfg.Section("LVL_EXP_USERS")
+				section.Key(m.UserID).SetValue("0")
+				err = cfg.SaveTo(filePath)
+				if err != nil {
+					fmt.Println("Помилка при збереженні у файл:", err)
+					return
+				}
+			}
+		}
+	}
 }
