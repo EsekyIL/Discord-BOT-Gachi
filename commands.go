@@ -10,6 +10,10 @@ import (
 	"gopkg.in/ini.v1"
 )
 
+var OneValue string
+var TwoValue string
+var ThreeValue string
+
 func ErrorWriter(err error, text string, lineNumber int) {
 
 	red := color.New(color.FgRed)
@@ -22,40 +26,6 @@ func ErrorWriter(err error, text string, lineNumber int) {
 }
 
 func registerCommands(sess *discordgo.Session) {
-
-	response := &discordgo.InteractionResponse{
-		Type: discordgo.InteractionResponseChannelMessageWithSource,
-		Data: &discordgo.InteractionResponseData{
-			Content: "⛔ Виникла помилка. 🔧 Зверніться у підтримку бота.",
-			Flags:   1 << 6,
-		},
-	}
-
-	cmdMenuLogs := discordgo.ApplicationCommand{
-		Name:        "logs",
-		Description: "Випадаюче меню з каналами",
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        7, // Числове значення для ApplicationCommandOptionTypeChannel
-				Name:        "message_id_channel",
-				Description: "Введіть ID каналу для логування повідомлень",
-				Required:    true,
-			},
-			{
-				Type:        7,
-				Name:        "voice_id_channel",
-				Description: "Введіть ID каналу для логування голосових каналів",
-				Required:    true,
-			},
-			{
-				Type:        7,
-				Name:        "server_id_channel",
-				Description: "Введіть ID каналу для логування серверу (входу, виходу, банів)",
-				Required:    true,
-			},
-		},
-	}
-
 	cmdEmojiReactions := &discordgo.ApplicationCommand{
 		Name:        "reaction",
 		Description: "Видача ролі на сервері по emoji",
@@ -81,7 +51,13 @@ func registerCommands(sess *discordgo.Session) {
 			},
 		},
 	}
-	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &cmdMenuLogs) // Створення і відправка команд !
+
+	selectMenu := discordgo.ApplicationCommand{
+		Name:        "settings",
+		Description: "Choose an option from settings",
+		Type:        discordgo.ChatApplicationCommand,
+	}
+	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &selectMenu) // Створення і відправка команд !
 	if err != nil {
 		_, _, lineNumber, _ := runtime.Caller(0)
 		ErrorWriter(err, "Помилка створення команди програми", lineNumber)
@@ -94,98 +70,450 @@ func registerCommands(sess *discordgo.Session) {
 		return
 	}
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) { // Модуль зчитування команд та збереження результату в файл
-		if ic.Type == discordgo.InteractionMessageComponent {
-			return
-		}
-		switch {
+		var response *discordgo.InteractionResponse
+
 		//	case ic.ApplicationCommandData().Name == "temp":  Видалення команд
 		//		idcmd := ic.ApplicationCommandData().ID
 		//		s.ApplicationCommandDelete("1160175895475138611", "", idcmd)
-		case ic.ApplicationCommandData().Name == "logs":
-			temp := ic.ApplicationCommandData().Options[0].ChannelValue(s)
-			channelID_M := temp.ID
-			temp = ic.ApplicationCommandData().Options[1].ChannelValue(s)
-			channelID_V := temp.ID
-			temp = ic.ApplicationCommandData().Options[2].ChannelValue(s)
-			channelID_S := temp.ID
-
-			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				_, _, lineNumber, _ := runtime.Caller(0)
-				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, response)
-				return
-			}
-			section := cfg.Section("LOGS")
-			section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(channelID_M)
-			section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(channelID_V)
-			section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(channelID_S)
-			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				_, _, lineNumber, _ := runtime.Caller(0)
-				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, response)
-				return
-			}
-			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "🎉 Тепер ви можете користуватись логуванням бота! 🎉",
-					Flags:   1 << 6,
-				},
-			})
-		case ic.ApplicationCommandData().Name == "reaction":
-			message_ID := ic.ApplicationCommandData().Options[0].StringValue()
-			emoji_string := ic.ApplicationCommandData().Options[1].StringValue()
-			role := ic.ApplicationCommandData().Options[2].RoleValue(s, ic.GuildID)
-
-			switch {
-			case len(message_ID) > 19:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина першої опції має бути не більше 19 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			case len(emoji_string) > 10:
-				s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Content: "⚠️ Довжина другої опції має бути не більше 10 символів",
-						Flags:   1 << 6,
-					},
-				})
-				return
-			}
-			cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				_, _, lineNumber, _ := runtime.Caller(0)
-				ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, response)
-				return
-			}
-			section := cfg.Section("EMOJI_REACTIONS")
-			section.Key("MESSAGE_REACTION_ID").SetValue(message_ID)
-			section.Key("EMOJI_REACTION").SetValue(emoji_string)
-			section.Key("ROLE_ADD_ID").SetValue(role.ID)
-			err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-			if err != nil {
-				_, _, lineNumber, _ := runtime.Caller(0)
-				ErrorWriter(err, "Помилка при збереженні конфігураційного файлу", lineNumber)
-				s.InteractionRespond(ic.Interaction, response)
-				return
-			}
-			s.InteractionRespond(ic.Interaction, &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Content: "🎉 Тепер ви можете користуватись видачею ролей через Emoji! 🎉",
-					Flags:   1 << 6,
-				},
-			})
+		embed1 := &discordgo.MessageEmbed{
+			Title:       "Налаштування функцій бота",
+			Description: "> Виберіть пункт, який хочете налаштувати",
+			Thumbnail: &discordgo.MessageEmbedThumbnail{
+				URL: "https://i.imgur.com/o7wcuxw.png",
+			},
+			Color: 0x6892c2,
+			Footer: &discordgo.MessageEmbedFooter{
+				Text:    "Kazaki",
+				IconURL: "https://i.imgur.com/04X5nxH.png",
+			},
 		}
+		switch ic.Type {
+		case discordgo.InteractionApplicationCommand:
+			switch ic.ApplicationCommandData().Name {
+			case "settings":
+				response = &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Embeds: []*discordgo.MessageEmbed{embed1},
+						Flags:  discordgo.MessageFlagsEphemeral,
+						Components: []discordgo.MessageComponent{
+							discordgo.ActionsRow{
+								Components: []discordgo.MessageComponent{
+									discordgo.SelectMenu{
+										// Select menu, as other components, must have a customID, so we set it to this value.
+										CustomID:    "select",
+										Placeholder: "Виберіть пункт налаштування 👇",
+										Options: []discordgo.SelectMenuOption{
+											{
+												Label: "Логування",
+												// As with components, this things must have their own unique "id" to identify which is which.
+												// In this case such id is Value field.
+												Value: "go",
+												Emoji: discordgo.ComponentEmoji{
+													Name: "📝",
+												},
+												// You can also make it a default option, but in this case we won't.
+												Default:     false,
+												Description: "Логування повідомлень, входу/виходу і тд...",
+											},
+											{
+												Label: "Видача ролі по Emoji",
+												Value: "js",
+												Emoji: discordgo.ComponentEmoji{
+													Name: "🎨",
+												},
+												Description: "Автоматична видача ролі",
+											},
+											{
+												Label: "Python",
+												Value: "py",
+												Emoji: discordgo.ComponentEmoji{
+													Name: "🐍",
+												},
+												Description: "Python programming language",
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				err := s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "", lineNumber)
+				}
+			}
+		case discordgo.InteractionMessageComponent:
+			minValues := 1
+			if ic.MessageComponentData().CustomID == "select" {
+				// Отримання вибору пункту списку
+				selectedValue := ic.MessageComponentData().Values[0]
+				embed_logs := &discordgo.MessageEmbed{
+					Title:       "Налаштування логування серверу",
+					Description: ">>> Виберіть канали для логування. Від `одного` до `трьох`. У будь який момент їх можна змінити. ",
+					Thumbnail: &discordgo.MessageEmbedThumbnail{
+						URL: "https://i.imgur.com/BKYSMoP.png",
+					},
+					Color: 0x6892c2,
+					Footer: &discordgo.MessageEmbedFooter{
+						Text:    "Kazaki",
+						IconURL: "https://i.imgur.com/04X5nxH.png",
+					},
+					Fields: []*discordgo.MessageEmbedField{
+						{
+							Name:  "Вибір першого каналу",
+							Value: "*Перший канал виводить вам `зміну/видалення` повідомлень на сервері.*",
+						},
+						{
+							Name:  "Вибір другого каналу",
+							Value: "*Другий канал виводить вам `вхід/перехід/вихід` з голосових каналів на сервері.*",
+						},
+						{
+							Name:  "Вибір третього каналу",
+							Value: "*Третій канал виводить `вхід/вихід/бан` користувача на сервері.*",
+						},
+						{
+							Name:  "Вибір каналу",
+							Value: "***Якщо хочете, щоб логування виводилось в один канал, просто виберіть той канал, який вам потрібен!***",
+						},
+					},
+				}
+				// Обробка вибраного значення
+				switch selectedValue {
+				case "go":
+					response = &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Embeds: []*discordgo.MessageEmbed{embed_logs},
+							Flags:  discordgo.MessageFlagsEphemeral,
+							Components: []discordgo.MessageComponent{
+								discordgo.ActionsRow{
+									Components: []discordgo.MessageComponent{
+										discordgo.SelectMenu{
+											MinValues:    &minValues,
+											MaxValues:    3,
+											MenuType:     discordgo.ChannelSelectMenu,
+											CustomID:     "channel_select",
+											Placeholder:  "Тута треба тицьнути",
+											ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
+										},
+									},
+								},
+							},
+						},
+					}
+					err := s.InteractionRespond(ic.Interaction, response)
+					if err != nil {
+						_, _, lineNumber, _ := runtime.Caller(0)
+						ErrorWriter(err, "", lineNumber)
+					}
+					println("go language its true ♥")
+				case "fd_yes":
+					println("Всі логі бляха муха")
+				case "py":
+					println("Py its easy")
+				}
+			}
+			if ic.MessageComponentData().CustomID == "channel_select" {
+				// Отримання вибору пункту списку
+				var Alone bool = false
+				var Two bool = false
+				var Three bool = false
+				switch len(ic.MessageComponentData().Values) {
+				case 1:
+					OneValue = ic.MessageComponentData().Values[0]
+					Alone = true
+				case 2:
+					OneValue = ic.MessageComponentData().Values[0]
+					TwoValue = ic.MessageComponentData().Values[1]
+					Two = true
+				case 3:
+					OneValue = ic.MessageComponentData().Values[0]
+					TwoValue = ic.MessageComponentData().Values[1]
+					ThreeValue = ic.MessageComponentData().Values[2]
+					Three = true
+				default:
+					TwoValue = OneValue
+					ThreeValue = OneValue
+				}
+				if Alone {
+					response = &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Flags:   discordgo.MessageFlagsEphemeral,
+							Content: ">>> *Якщо ви хочете всі логи направляти до одного каналу, натисніть кнопку `Усі логи`. Якщо вам потрібне конкретне логування для повідомлень, голосових каналів або подій, виберіть відповідну опцію.*",
+							Components: []discordgo.MessageComponent{
+								discordgo.ActionsRow{
+									Components: []discordgo.MessageComponent{
+										discordgo.Button{
+											Label:    "Усі логи",
+											Style:    discordgo.SuccessButton,
+											Disabled: false,
+											CustomID: "fd_yes",
+											Emoji: discordgo.ComponentEmoji{
+												Name: "✔️",
+											},
+										},
+										discordgo.Button{
+											Label:    "Повідомлення",
+											Style:    discordgo.SecondaryButton,
+											Disabled: false,
+											CustomID: "fd_message",
+											Emoji: discordgo.ComponentEmoji{
+												Name: "💬",
+											},
+										},
+										discordgo.Button{
+											Label:    "Голосові канали",
+											Style:    discordgo.SecondaryButton,
+											Disabled: false,
+											CustomID: "fd_voice",
+											Emoji: discordgo.ComponentEmoji{
+												Name: "🎙️",
+											},
+										},
+										discordgo.Button{
+											Label:    "Події",
+											Style:    discordgo.SecondaryButton,
+											Disabled: false,
+											CustomID: "fd_event",
+											Emoji: discordgo.ComponentEmoji{
+												Name: "📢",
+											},
+										},
+									},
+								},
+							},
+						},
+					}
+					err := s.InteractionRespond(ic.Interaction, response)
+					if err != nil {
+						_, _, lineNumber, _ := runtime.Caller(0)
+						ErrorWriter(err, "", lineNumber)
+					}
+				}
 
+				if Two {
+					embed_three := &discordgo.MessageEmbed{
+						Title:       "Незрозуміло",
+						Color:       0xffa100,
+						Description: "> Функція пока в розробці",
+						Image: &discordgo.MessageEmbedImage{
+							URL: "https://i.imgur.com/gYaQOEj.jpg",
+						},
+						Footer: &discordgo.MessageEmbedFooter{
+							Text:    "Kazaki",
+							IconURL: "https://i.imgur.com/04X5nxH.png",
+						},
+					}
+					response = &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Flags:  discordgo.MessageFlagsEphemeral,
+							Embeds: []*discordgo.MessageEmbed{embed_three},
+						},
+					}
+					err = s.InteractionRespond(ic.Interaction, response)
+					if err != nil {
+						_, _, lineNumber, _ := runtime.Caller(0)
+						ErrorWriter(err, "", lineNumber)
+					}
+				}
+
+				if Three {
+					cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
+					if err != nil {
+						_, _, lineNumber, _ := runtime.Caller(0)
+						ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+						return
+					}
+					section := cfg.Section("LOGS")
+					section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(OneValue)
+					section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(TwoValue)
+					section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(ThreeValue)
+					err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
+					if err != nil {
+						_, _, lineNumber, _ := runtime.Caller(0)
+						ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+						return
+					}
+					embed_three := &discordgo.MessageEmbed{
+						Title:       "Успішно",
+						Color:       0x0ea901,
+						Description: "> Тепер можете користуватись логуванням всього серверу",
+						Footer: &discordgo.MessageEmbedFooter{
+							Text:    "Kazaki",
+							IconURL: "https://i.imgur.com/04X5nxH.png",
+						},
+					}
+					response = &discordgo.InteractionResponse{
+						Type: discordgo.InteractionResponseChannelMessageWithSource,
+						Data: &discordgo.InteractionResponseData{
+							Flags:  discordgo.MessageFlagsEphemeral,
+							Embeds: []*discordgo.MessageEmbed{embed_three},
+						},
+					}
+					err = s.InteractionRespond(ic.Interaction, response)
+					if err != nil {
+						_, _, lineNumber, _ := runtime.Caller(0)
+						ErrorWriter(err, "", lineNumber)
+					}
+				}
+
+			}
+			if ic.MessageComponentData().CustomID == "fd_yes" {
+				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				section := cfg.Section("LOGS")
+				section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(OneValue)
+				section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(OneValue)
+				section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(OneValue)
+				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				embed_AllOne := &discordgo.MessageEmbed{
+					Title:       "Успішно",
+					Color:       0x0ea901,
+					Description: "> Тепер можете користуватись логуванням всього серверу лише в один канал",
+					Footer: &discordgo.MessageEmbedFooter{
+						Text:    "Kazaki",
+						IconURL: "https://i.imgur.com/04X5nxH.png",
+					},
+				}
+				response = &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags:  discordgo.MessageFlagsEphemeral,
+						Embeds: []*discordgo.MessageEmbed{embed_AllOne},
+					},
+				}
+				err = s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+				}
+			}
+			if ic.MessageComponentData().CustomID == "fd_message" {
+				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				section := cfg.Section("LOGS")
+				section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(OneValue)
+				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				embed_AllOne := &discordgo.MessageEmbed{
+					Title:       "Успішно",
+					Color:       0x0ea901,
+					Description: "> Тепер можете користуватись тільки логуванням повідомлень",
+					Footer: &discordgo.MessageEmbedFooter{
+						Text:    "Kazaki",
+						IconURL: "https://i.imgur.com/04X5nxH.png",
+					},
+				}
+				response = &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags:  discordgo.MessageFlagsEphemeral,
+						Embeds: []*discordgo.MessageEmbed{embed_AllOne},
+					},
+				}
+				err = s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+				}
+			}
+			if ic.MessageComponentData().CustomID == "fd_voice" {
+				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				section := cfg.Section("LOGS")
+				section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(OneValue)
+				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				embed_AllOne := &discordgo.MessageEmbed{
+					Title:       "Успішно",
+					Color:       0x0ea901,
+					Description: "> Тепер можете користуватись тільки логуванням голосових каналів",
+					Footer: &discordgo.MessageEmbedFooter{
+						Text:    "Kazaki",
+						IconURL: "https://i.imgur.com/04X5nxH.png",
+					},
+				}
+				response = &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags:  discordgo.MessageFlagsEphemeral,
+						Embeds: []*discordgo.MessageEmbed{embed_AllOne},
+					},
+				}
+				err = s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+				}
+			}
+			if ic.MessageComponentData().CustomID == "fd_event" {
+				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				section := cfg.Section("LOGS")
+				section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(OneValue)
+				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					return
+				}
+				embed_AllOne := &discordgo.MessageEmbed{
+					Title:       "Успішно",
+					Color:       0x0ea901,
+					Description: "> Тепер можете користуватись тільки логуванням входу/виходу/банів на сервер",
+					Footer: &discordgo.MessageEmbedFooter{
+						Text:    "Kazaki",
+						IconURL: "https://i.imgur.com/04X5nxH.png",
+					},
+				}
+				response = &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags:  discordgo.MessageFlagsEphemeral,
+						Embeds: []*discordgo.MessageEmbed{embed_AllOne},
+					},
+				}
+				err = s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					_, _, lineNumber, _ := runtime.Caller(0)
+					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+				}
+			}
+		}
 	})
 }
 func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {

@@ -44,7 +44,7 @@ func main() {
 		MessageSaveToLog(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) { // Модуль додавання ролі по реакції на повідомлення
-		RoleAddByEmoji(s, m)
+		//RoleAddByEmoji(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) { // Модуль логування оновленого повідомлення, а також запис у log
 		if m.Author == nil || m.Author.Bot {

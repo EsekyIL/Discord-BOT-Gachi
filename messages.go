@@ -230,3 +230,6 @@ func MessageDeleteLog(s *discordgo.Session, m *discordgo.MessageDelete) {
 	}
 	file.Close()
 }
+func AllMessageDeletedInChannel() {
+
+}
