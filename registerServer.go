@@ -2,14 +2,14 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/fatih/color"
 	"gopkg.in/ini.v1"
-	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 func registerServer(g *discordgo.GuildCreate) { // Модуль створення папки серверу, конфігураційного файлу а також лога повідомлень
@@ -37,7 +37,7 @@ func registerServer(g *discordgo.GuildCreate) { // Модуль створенн
 	section := cfg.Section("GUILD")
 	section.Key("GUILD_NAME").SetValue(g.Guild.Name)
 	section.Key("GUILD_ID").SetValue(g.Guild.ID)
-	section.Key("GUILD_REGION").SetValue(g.Guild.Region)
+	section.Key("GUILD_MEMBERS").SetValue(strconv.Itoa(g.Guild.MemberCount))
 	section = cfg.Section("LOGS")
 	section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue("")
 	section.Key("CHANNEL_LOGS_VOICE_ID").SetValue("")
@@ -53,13 +53,22 @@ func registerServer(g *discordgo.GuildCreate) { // Модуль створенн
 		fmt.Println(writer(errorMsg))
 		return
 	}
-	var logger *log.Logger
-	l := &lumberjack.Logger{
-		Filename:   "servers/" + g.Guild.ID + "/message.log",
-		MaxSize:    8192, // мегабайти
-		MaxBackups: 1,
-		MaxAge:     30, // дні
+
+	logFilePath := "servers/" + g.Guild.ID + "/message.log"
+	file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		slog.Error("Не вдалося відкрити файл для логів", "error", err)
+		return
 	}
-	logger = log.New(l, "", log.LstdFlags)
-	logger.Println("Привіт, цей бот був написаний ручками 𝕙𝕥𝕥𝕡𝕤://𝕥.𝕞𝕖/𝔼𝕤𝕖𝕜𝕪𝕚𝕝 ♥")
+	defer file.Close()
+
+	logger := slog.New(slog.NewJSONHandler(file, nil))
+	logger.Info("Hello World",
+		slog.Group("user",
+			slog.String("id", "0"),
+			slog.String("name", "Esekyil"),
+			slog.String("msg", "Привіт, цей бот був написаний ручками 𝕙𝕥𝕥𝕡𝕤://𝕥.𝕞𝕖/𝔼𝕤𝕖𝕜𝕪𝕚𝕝 ♥"),
+		),
+		slog.String("status", "successful"),
+	)
 }

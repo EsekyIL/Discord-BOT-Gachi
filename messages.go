@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -31,14 +32,27 @@ func MessageSaveToLog(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsVoice || m.ChannelID == ChannelLogsServer {
 		return
 	} else {
-		filePath := filepath.Join("servers", m.GuildID, "message.log")
-		file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+		logFilePath := filepath.Join("servers", m.GuildID, "message.log")
+		file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			log.Fatal(err)
+			errorMsg := fmt.Sprintf("Помилка при завантаженні логувального файлу: %v", err)
+			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
+			fmt.Println(writer(errorMsg))
+			return
 		}
 		defer file.Close()
-		logger := log.New(file, "", log.LstdFlags)
-		logger.Println("Text message: " + m.Content + " | " + "Nickname: " + m.Author.Username + " | " + "ID: " + m.Author.ID + " | " + "messageID: " + m.Message.ID + " | " + "ChannelID: " + m.ChannelID)
+
+		logger := slog.New(slog.NewJSONHandler(file, nil))
+		logger.Info("Логування",
+			slog.Group("USER",
+				slog.String("ID", m.Author.ID),
+				slog.String("NAME", m.Author.Username),
+				slog.String("MSG", m.Content),
+				slog.String("MSG_ID", m.Message.ID),
+				slog.String("CHANNEL_ID", m.ChannelID),
+			),
+		)
+
 	}
 }
 func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {

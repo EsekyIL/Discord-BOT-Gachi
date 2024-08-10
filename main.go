@@ -10,15 +10,26 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	"github.com/fatih/color"
+	"github.com/joho/godotenv"
 )
 
 // Колір помилок commands.go - червоний
+func goDotEnvVariable(key string) string {
+
+	// завантажити файл .env
+	err := godotenv.Load(".env")
+
+	if err != nil {
+		log.Fatalf("Помилка завантаження файлу .env")
+	}
+	return os.Getenv(key)
+}
 
 func main() {
-	const Token = "MTE2MDE3NTg5NTQ3NTEzODYxMQ.GLxSos.THu0Vl5ZGXPRQN3MrOIMP9fgZqumGvQyRY3ORs"
+	token := goDotEnvVariable("API_KEY")
 	userChannels := make(map[string]string)
 	userTimeJoinVoice := make(map[string]string)
-	sess, err := discordgo.New("Bot " + Token) // Відкриття сессії з ботом
+	sess, err := discordgo.New("Bot " + token) // Відкриття сессії з ботом
 	if err != nil {
 		log.Fatal(err)
 	}
