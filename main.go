@@ -1,19 +1,21 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
+	"log/slog"
 	"os"
 	"os/signal"
-	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/fatih/color"
+	_ "github.com/glebarez/sqlite"
 	"github.com/joho/godotenv"
+	"github.com/lmittmann/tint"
 )
 
-// Колір помилок commands.go - червоний
 func goDotEnvVariable(key string) string {
 
 	// завантажити файл .env
@@ -24,44 +26,69 @@ func goDotEnvVariable(key string) string {
 	}
 	return os.Getenv(key)
 }
+func Error(msg string, err error) {
+	logger := slog.New(tint.NewHandler(os.Stderr, nil))
+
+	// set global logger with custom options
+	slog.SetDefault(slog.New(
+		tint.NewHandler(os.Stderr, &tint.Options{
+			Level:      slog.LevelDebug,
+			TimeFormat: time.Kitchen,
+		}),
+	))
+	logger.Error(msg, "Помилка", err)
+}
 
 func main() {
+	database, err := sql.Open("sqlite", "./gopher.db")
+	if err != nil {
+		Error("Failed to open the database", err)
+	}
+	defer database.Close()
+
+	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS servers (id INTEGER PRIMARY KEY, name TEXT, members INTEGER, channel_log_msgID INTEGER, channel_log_voiceID INTEGER, channel_log_serverID Integer)")
+
+	defer statement.Close()
+
+	_, err = statement.Exec()
+	if err != nil {
+		Error("Failed to execute the SQL statement", err)
+	}
+
 	token := goDotEnvVariable("API_KEY")
 	userChannels := make(map[string]string)
 	userTimeJoinVoice := make(map[string]string)
-	sess, err := discordgo.New("Bot " + token) // Відкриття сессії з ботом
-	if err != nil {
-		log.Fatal(err)
-	}
+	sess, _ := discordgo.New("Bot " + token) // Відкриття сессії з ботом
+
 	registerCommands(sess)
+
+	sess.StateEnabled = true
+	sess.State.MaxMessageCount = 1000
+
 	sess.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
-		basePath := "./servers"
-		folderName := g.Guild.ID
-		folderPath := filepath.Join(basePath, folderName)
-		_, err := os.Stat(folderPath)
-		if os.IsNotExist(err) {
-			registerServer(g)
-			red := color.New(color.FgRed)
-			boldRed := red.Add(color.Bold)
-			whiteBackground := boldRed.Add(color.BgCyan)
-			whiteBackground.Printf("🎉 Урааа. %v добавили бота на свій сервер! 🎉", g.Guild.Name)
-			print("\n")
-		}
-	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль відстеження повідомлень, а також запис їх у log!
-		if m.Author.Bot {
+		rows, _ := database.Query("SELECT id, name, members FROM servers WHERE id = ?", g.Guild.ID)
+		var id int
+		var name string
+		var members int
+
+		if rows.Next() {
+			err = rows.Scan(&id, &name, &members)
+			if err != nil {
+				Error("Failed to scan the row", err)
+			}
+		} else {
+			if err := rows.Err(); err != nil {
+				Error("Failed during iteration over rows", err)
+			}
+			go registerServer(g, database) // Виклик функції для реєстрації сервера, якщо дані не знайдено
 			return
 		}
-		go MessageSaveToLog(s, m)
 	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) { // Модуль додавання ролі по реакції на повідомлення
-		//RoleAddByEmoji(s, m)
-	})
-	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) { // Модуль логування оновленого повідомлення, а також запис у log
+	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) { // Модуль логування оновленого повідомлення
 		if m.Author == nil || m.Author.Bot {
 			return
 		}
-		go MessageUpdateToLog(s, m)
+		go MsgUpdate(s, m, database)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) { // Модуль логування видаленого повідомлення
 		go MessageDeleteLog(s, m)
