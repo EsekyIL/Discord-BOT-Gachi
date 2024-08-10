@@ -54,7 +54,7 @@ func registerServer(g *discordgo.GuildCreate) { // Модуль створенн
 		return
 	}
 
-	logFilePath := "servers/" + g.Guild.ID + "/message.log"
+	logFilePath := "servers/" + g.Guild.ID + "/message.json"
 	file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		slog.Error("Не вдалося відкрити файл для логів", "error", err)
@@ -62,13 +62,4 @@ func registerServer(g *discordgo.GuildCreate) { // Модуль створенн
 	}
 	defer file.Close()
 
-	logger := slog.New(slog.NewJSONHandler(file, nil))
-	logger.Info("Hello World",
-		slog.Group("user",
-			slog.String("id", "0"),
-			slog.String("name", "Esekyil"),
-			slog.String("msg", "Привіт, цей бот був написаний ручками 𝕙𝕥𝕥𝕡𝕤://𝕥.𝕞𝕖/𝔼𝕤𝕖𝕜𝕪𝕚𝕝 ♥"),
-		),
-		slog.String("status", "successful"),
-	)
 }

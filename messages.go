@@ -2,13 +2,12 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
-	"io"
-	"log"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -16,6 +15,15 @@ import (
 	"github.com/fatih/color"
 	"gopkg.in/ini.v1"
 )
+
+type LogStruct struct {
+	MsgID     int    `json:"ID"`
+	Name      string `json:"NAME"`
+	Msg       string `json:"MSG"`
+	ID        int    `json:"MSG_ID"`
+	ChannelID int    `json:"CHANNEL_ID"`
+	Status    string `json:"STATUS"`
+}
 
 func MessageSaveToLog(s *discordgo.Session, m *discordgo.MessageCreate) {
 	cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
@@ -32,27 +40,52 @@ func MessageSaveToLog(s *discordgo.Session, m *discordgo.MessageCreate) {
 	if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsVoice || m.ChannelID == ChannelLogsServer {
 		return
 	} else {
-		logFilePath := filepath.Join("servers", m.GuildID, "message.log")
-		file, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		logFilePath := filepath.Join("servers", m.GuildID, "message.json")
+
+		// Зчитування існуючих даних
+		var logs []LogStruct
+
+		if _, err := os.Stat(logFilePath); err == nil {
+			fileData, err := os.ReadFile(logFilePath)
+			if err != nil {
+				fmt.Println("Error reading file:", err)
+				return
+			}
+
+			// Якщо файл не порожній, пробуємо розпарсити JSON
+			if len(fileData) > 0 {
+				if err := json.Unmarshal(fileData, &logs); err != nil {
+					fmt.Println("Error unmarshaling JSON:", err)
+					return
+				}
+			}
+		}
+
+		// Додаємо новий запис
+		MSG_ID, _ := strconv.Atoi(m.Message.ID)
+		AUTHOR_ID, _ := strconv.Atoi(m.Author.ID)
+		CHANNEL_ID, _ := strconv.Atoi(m.ChannelID)
+
+		logs = append(logs, LogStruct{
+			MsgID:     MSG_ID,
+			Name:      m.Author.Username,
+			Msg:       m.Content,
+			ID:        AUTHOR_ID,
+			ChannelID: CHANNEL_ID,
+			Status:    "Нове",
+		})
+
+		// Серіалізація масиву в JSON
+		data, err := json.MarshalIndent(logs, "", "  ") // Використовуємо MarshalIndent для читабельності
 		if err != nil {
-			errorMsg := fmt.Sprintf("Помилка при завантаженні логувального файлу: %v", err)
-			writer := color.New(color.FgBlue, color.Bold).SprintFunc()
-			fmt.Println(writer(errorMsg))
+			fmt.Println("Error marshaling JSON:", err)
 			return
 		}
-		defer file.Close()
 
-		logger := slog.New(slog.NewJSONHandler(file, nil))
-		logger.Info("Логування",
-			slog.Group("USER",
-				slog.String("ID", m.Author.ID),
-				slog.String("NAME", m.Author.Username),
-				slog.String("MSG", m.Content),
-				slog.String("MSG_ID", m.Message.ID),
-				slog.String("CHANNEL_ID", m.ChannelID),
-			),
-		)
-
+		// Запис оновленого масиву в файл
+		if err := os.WriteFile(logFilePath, data, 0666); err != nil {
+			fmt.Println("Error writing to file:", err)
+		}
 	}
 }
 func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {
@@ -67,6 +100,10 @@ func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {
 	ChannelLogsMessages := section.Key("CHANNEL_LOGS_MESSAGE_ID").String()
 	ChannelLogsVoice := section.Key("CHANNEL_LOGS_VOICE_ID").String()
 	ChannelLogsServer := section.Key("CHANNEL_LOGS_SERVER_ID").String()
+	if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsServer || m.ChannelID == ChannelLogsVoice {
+		return
+	}
+
 	switch {
 	case len(ChannelLogsMessages) != 19:
 		return
@@ -75,51 +112,21 @@ func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {
 	case len(ChannelLogsServer) != 19:
 		return
 	}
-	if m.ChannelID == ChannelLogsMessages || m.ChannelID == ChannelLogsServer || m.ChannelID == ChannelLogsVoice {
-		return
-	}
-	currentTime := time.Now()
-	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
-	MessageUpdateID := m.Message.ID
-	UserMessage := ""
-	file, err := os.OpenFile("servers/"+m.GuildID+"/message.log", os.O_RDWR, 0644)
+
+	var UserInfo [5]string
+
+	file, err := os.OpenFile("servers/"+m.GuildID+"/message.", os.O_RDWR, 0666)
 	if err != nil {
 		fmt.Println("Помилка відкриття файлу:", err)
 		return
 	}
 	defer file.Close()
 
-	scanner := bufio.NewScanner(file)
+	// Розпарсування JSON
 
-	for scanner.Scan() {
-		line := scanner.Text()
-		if strings.Contains(line, MessageUpdateID) {
-			re := regexp.MustCompile(`Text message: ([^|]+)`)
-			match := re.FindStringSubmatch(line)
-			if len(match) > 1 {
-				UserMessage = match[1]
-				_, err := file.Seek(int64(-len(line)), io.SeekCurrent)
-				if err != nil {
-					fmt.Println("error seeking:", err)
-					return
-				}
-				filePath := filepath.Join("servers", m.GuildID, "message.log")
-				file, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-				if err != nil {
-					log.Fatal(err)
-				}
-				defer file.Close()
-				logger := log.New(file, "", log.LstdFlags)
-				logger.Println("Text message: " + m.Content + " | " + "Nickname: " + m.Author.Username + " | " + "ID: " + m.Author.ID + " | " + "messageID: " + m.Message.ID + " | " + "ChannelID: " + m.ChannelID)
-				break
-			}
-		}
-	}
+	currentTime := time.Now()
+	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	if err := scanner.Err(); err != nil {
-		fmt.Println("Помилка при читанні файлу:", err)
-		return
-	}
 	embed := &discordgo.MessageEmbed{
 		Title: "Повідомлення оновлено",
 		Fields: []*discordgo.MessageEmbedField{
@@ -136,11 +143,12 @@ func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		},
 		Description: fmt.Sprintf(
 			">>> **Було: **"+"_%s_"+"\n"+"**Стало: **"+"_%s_",
-			UserMessage,
+			UserInfo[2],
 			m.Content,
 		),
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: "https://i.imgur.com/g4OsjhU.png",
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    m.Member.User.Username,
+			IconURL: m.Member.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
 		},
 		Color:     0xeda15f, // Колір (у форматі HEX)
 		Timestamp: stringTime,

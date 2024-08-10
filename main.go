@@ -52,7 +52,7 @@ func main() {
 		if m.Author.Bot {
 			return
 		}
-		MessageSaveToLog(s, m)
+		go MessageSaveToLog(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageReactionAdd) { // Модуль додавання ролі по реакції на повідомлення
 		//RoleAddByEmoji(s, m)
@@ -61,19 +61,19 @@ func main() {
 		if m.Author == nil || m.Author.Bot {
 			return
 		}
-		MessageUpdateToLog(s, m)
+		go MessageUpdateToLog(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) { // Модуль логування видаленого повідомлення
-		MessageDeleteLog(s, m)
+		go MessageDeleteLog(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) { // Модуль логування входу/переходу/виходу в голосових каналах
-		VoiceLog(s, vs, &userChannels, &userTimeJoinVoice)
+		go VoiceLog(s, vs, &userChannels, &userTimeJoinVoice)
 	})
 	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) { // Модуль логування надходження користувачів на сервер
-		InvitePeopleToServer(s, gma)
+		go InvitePeopleToServer(s, gma)
 	})
 	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) { // Модуль логування виходу користувачів з серверу
-		ExitPeopleFromServer(s, gmr)
+		go ExitPeopleFromServer(s, gmr)
 	})
 	sess.AddHandler(func(s *discordgo.Session, b *discordgo.GuildBanAdd) { // Модуль логування бану користувачів на сервер
 		// Створення об'єкта для представлення забаненого користувача
@@ -85,7 +85,7 @@ func main() {
 		}
 
 		// Виклик функції для обробки події бану користувача
-		BanUserToServer(s, b, ba)
+		go BanUserToServer(s, b, ba)
 	})
 	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers // Доп. дозволи
 
