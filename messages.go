@@ -113,16 +113,56 @@ func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		return
 	}
 
-	var UserInfo [5]string
+	logFilePath := filepath.Join("servers", m.GuildID, "message.json")
 
-	file, err := os.OpenFile("servers/"+m.GuildID+"/message.", os.O_RDWR, 0666)
+	var logs []LogStruct
+
+	if _, err := os.Stat(logFilePath); err == nil {
+		fileData, err := os.ReadFile(logFilePath)
+		if err != nil {
+			fmt.Println("Error reading file:", err)
+			return
+		}
+
+		// Якщо файл не порожній, пробуємо розпарсити JSON
+		if len(fileData) > 0 {
+			if err := json.Unmarshal(fileData, &logs); err != nil {
+				fmt.Println("Error unmarshaling JSON:", err)
+				return
+			}
+		}
+	}
+
+	MSG_ID, _ := strconv.Atoi(m.Message.ID)
+	AUTHOR_ID, _ := strconv.Atoi(m.Author.ID)
+	CHANNEL_ID, _ := strconv.Atoi(m.ChannelID)
+	var UserInfo LogStruct
+
+	for i, log := range logs {
+		if log.MsgID == MSG_ID {
+			UserInfo = log
+			logs[i] = LogStruct{
+				MsgID:     MSG_ID,
+				Name:      m.Author.Username,
+				Msg:       m.Content,
+				ID:        AUTHOR_ID,
+				ChannelID: CHANNEL_ID,
+				Status:    "Оновлене",
+			}
+			break
+		}
+	}
+	data, err := json.MarshalIndent(logs, "", "  ") // Використовуємо MarshalIndent для читабельності
 	if err != nil {
-		fmt.Println("Помилка відкриття файлу:", err)
+		fmt.Println("Error marshaling JSON:", err)
 		return
 	}
-	defer file.Close()
 
-	// Розпарсування JSON
+	// Запис оновленого масиву в файл
+	if err := os.WriteFile(logFilePath, data, 0666); err != nil {
+		fmt.Println("Error writing to file:", err)
+		return
+	}
 
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
@@ -143,12 +183,12 @@ func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		},
 		Description: fmt.Sprintf(
 			">>> **Було: **"+"_%s_"+"\n"+"**Стало: **"+"_%s_",
-			UserInfo[2],
+			UserInfo.Msg,
 			m.Content,
 		),
 		Footer: &discordgo.MessageEmbedFooter{
-			Text:    m.Member.User.Username,
-			IconURL: m.Member.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
+			Text:    m.Author.Username,
+			IconURL: m.Author.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
 		},
 		Color:     0xeda15f, // Колір (у форматі HEX)
 		Timestamp: stringTime,
@@ -158,7 +198,6 @@ func MessageUpdateToLog(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		fmt.Println("error getting member:", err)
 		return
 	}
-	file.Close()
 }
 func MessageDeleteLog(s *discordgo.Session, m *discordgo.MessageDelete) {
 	cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
