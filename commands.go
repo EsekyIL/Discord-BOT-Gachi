@@ -1,77 +1,29 @@
 package main
 
 import (
-	"fmt"
-	"runtime"
-	"time"
+	"database/sql"
 
 	"github.com/bwmarrin/discordgo"
-	"github.com/fatih/color"
-	"gopkg.in/ini.v1"
 )
 
-var OneValue string
-var TwoValue string
-var ThreeValue string
-
-func ErrorWriter(err error, text string, lineNumber int) {
-
-	red := color.New(color.FgRed)
-	boldRed := red.Add(color.Bold)
-
-	currentTime := time.Now()
-	timestamp := currentTime.Format("2006-01-02 15:04:05")
-
-	boldRed.Printf("%s - [%d.line] - %s: %s\n", timestamp, lineNumber, text, err)
-}
-
-func registerCommands(sess *discordgo.Session) {
-	cmdEmojiReactions := &discordgo.ApplicationCommand{
-		Name:        "reaction",
-		Description: "Видача ролі на сервері по emoji",
-		Type:        discordgo.ChatApplicationCommand,
-		Options: []*discordgo.ApplicationCommandOption{
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "message_id",
-				Description: "Введіть ID повідомлення на якому будуть Emoji",
-				Required:    true,
-			},
-			{
-				Type:        discordgo.ApplicationCommandOptionString,
-				Name:        "emoji",
-				Description: "Введіть Emoji яке мають натискати користувачі",
-				Required:    true,
-			},
-			{
-				Type:        8,
-				Name:        "role_id",
-				Description: "Введіть ID ролі, яка буде видаватись користувачам",
-				Required:    true,
-			},
-		},
-	}
+func registerCommands(sess *discordgo.Session, database *sql.DB) {
 
 	selectMenu := discordgo.ApplicationCommand{
 		Name:        "settings",
-		Description: "Choose an option from settings",
+		Description: "Виберіть опцію в налаштуваннях",
 		Type:        discordgo.ChatApplicationCommand,
 	}
 	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &selectMenu) // Створення і відправка команд !
 	if err != nil {
-		_, _, lineNumber, _ := runtime.Caller(0)
-		ErrorWriter(err, "Помилка створення команди програми", lineNumber)
-		return
-	}
-	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", cmdEmojiReactions)
-	if err != nil {
-		_, _, lineNumber, _ := runtime.Caller(0)
-		ErrorWriter(err, "Помилка створення команди програми", lineNumber)
+		Error("Помилка створення команди програми", err)
 		return
 	}
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) { // Модуль зчитування команд та збереження результату в файл
 		var response *discordgo.InteractionResponse
 
+		OneValue := ""
+		TwoValue := ""
+		ThreeValue := ""
 		//	case ic.ApplicationCommandData().Name == "temp":  Видалення команд
 		//		idcmd := ic.ApplicationCommandData().ID
 		//		s.ApplicationCommandDelete("1160175895475138611", "", idcmd)
@@ -108,7 +60,7 @@ func registerCommands(sess *discordgo.Session) {
 												Label: "Логування",
 												// As with components, this things must have their own unique "id" to identify which is which.
 												// In this case such id is Value field.
-												Value: "go",
+												Value: "logyvanie",
 												Emoji: discordgo.ComponentEmoji{
 													Name: "📝",
 												},
@@ -141,8 +93,7 @@ func registerCommands(sess *discordgo.Session) {
 				}
 				err := s.InteractionRespond(ic.Interaction, response)
 				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "", lineNumber)
+					Error("", err)
 				}
 			}
 		case discordgo.InteractionMessageComponent:
@@ -182,7 +133,7 @@ func registerCommands(sess *discordgo.Session) {
 				}
 				// Обробка вибраного значення
 				switch selectedValue {
-				case "go":
+				case "logyvanie":
 					response = &discordgo.InteractionResponse{
 						Type: discordgo.InteractionResponseChannelMessageWithSource,
 						Data: &discordgo.InteractionResponseData{
@@ -206,10 +157,8 @@ func registerCommands(sess *discordgo.Session) {
 					}
 					err := s.InteractionRespond(ic.Interaction, response)
 					if err != nil {
-						_, _, lineNumber, _ := runtime.Caller(0)
-						ErrorWriter(err, "", lineNumber)
+						Error("", err)
 					}
-					println("go language its true ♥")
 				case "fd_yes":
 					println("Всі логі бляха муха")
 				case "py":
@@ -290,8 +239,7 @@ func registerCommands(sess *discordgo.Session) {
 					}
 					err := s.InteractionRespond(ic.Interaction, response)
 					if err != nil {
-						_, _, lineNumber, _ := runtime.Caller(0)
-						ErrorWriter(err, "", lineNumber)
+						Error("", err)
 					}
 				}
 
@@ -317,28 +265,15 @@ func registerCommands(sess *discordgo.Session) {
 					}
 					err = s.InteractionRespond(ic.Interaction, response)
 					if err != nil {
-						_, _, lineNumber, _ := runtime.Caller(0)
-						ErrorWriter(err, "", lineNumber)
+						Error("", err)
 					}
 				}
 
 				if Three {
-					cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-					if err != nil {
-						_, _, lineNumber, _ := runtime.Caller(0)
-						ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-						return
-					}
-					section := cfg.Section("LOGS")
-					section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(OneValue)
-					section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(TwoValue)
-					section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(ThreeValue)
-					err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-					if err != nil {
-						_, _, lineNumber, _ := runtime.Caller(0)
-						ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-						return
-					}
+					statement, _ := database.Prepare("UPDATE servers SET channel_log_msgID = ?, channel_log_voiceID = ?, channel_log_serverID = ? WHERE id = ?")
+					statement.Exec(OneValue, TwoValue, ThreeValue, ic.GuildID)
+					defer statement.Close()
+
 					embed_three := &discordgo.MessageEmbed{
 						Title:       "Успішно",
 						Color:       0x0ea901,
@@ -357,29 +292,16 @@ func registerCommands(sess *discordgo.Session) {
 					}
 					err = s.InteractionRespond(ic.Interaction, response)
 					if err != nil {
-						_, _, lineNumber, _ := runtime.Caller(0)
-						ErrorWriter(err, "", lineNumber)
+						Error("", err)
 					}
 				}
 
 			}
 			if ic.MessageComponentData().CustomID == "fd_yes" {
-				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
-				section := cfg.Section("LOGS")
-				section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(OneValue)
-				section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(OneValue)
-				section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(OneValue)
-				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
+				statement, _ := database.Prepare("UPDATE servers SET channel_log_msgID = ?, channel_log_voiceID = ?, channel_log_serverID = ? WHERE id = ?")
+				statement.Exec(OneValue, OneValue, OneValue, ic.GuildID)
+				defer statement.Close()
+
 				embed_AllOne := &discordgo.MessageEmbed{
 					Title:       "Успішно",
 					Color:       0x0ea901,
@@ -398,25 +320,14 @@ func registerCommands(sess *discordgo.Session) {
 				}
 				err = s.InteractionRespond(ic.Interaction, response)
 				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					Error("Помилка при завантаженні конфігураційного файлу", err)
 				}
 			}
 			if ic.MessageComponentData().CustomID == "fd_message" {
-				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
-				section := cfg.Section("LOGS")
-				section.Key("CHANNEL_LOGS_MESSAGE_ID").SetValue(OneValue)
-				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
+				statement, _ := database.Prepare("UPDATE servers SET channel_log_msgID = ? WHERE id = ?")
+				statement.Exec(OneValue, ic.GuildID)
+				defer statement.Close()
+
 				embed_AllOne := &discordgo.MessageEmbed{
 					Title:       "Успішно",
 					Color:       0x0ea901,
@@ -435,25 +346,14 @@ func registerCommands(sess *discordgo.Session) {
 				}
 				err = s.InteractionRespond(ic.Interaction, response)
 				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					Error("Помилка при завантаженні конфігураційного файлу", err)
 				}
 			}
 			if ic.MessageComponentData().CustomID == "fd_voice" {
-				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
-				section := cfg.Section("LOGS")
-				section.Key("CHANNEL_LOGS_VOICE_ID").SetValue(OneValue)
-				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
+				statement, _ := database.Prepare("UPDATE servers SET channel_log_voiceID = ? WHERE id = ?")
+				statement.Exec(OneValue, ic.GuildID)
+				defer statement.Close()
+
 				embed_AllOne := &discordgo.MessageEmbed{
 					Title:       "Успішно",
 					Color:       0x0ea901,
@@ -472,130 +372,35 @@ func registerCommands(sess *discordgo.Session) {
 				}
 				err = s.InteractionRespond(ic.Interaction, response)
 				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
+					Error("Помилка при завантаженні конфігураційного файлу", err)
 				}
 			}
 			if ic.MessageComponentData().CustomID == "fd_event" {
-				cfg, err := ini.Load("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
-				section := cfg.Section("LOGS")
-				section.Key("CHANNEL_LOGS_SERVER_ID").SetValue(OneValue)
-				err = cfg.SaveTo("servers/" + ic.GuildID + "/config.ini")
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-					return
-				}
-				embed_AllOne := &discordgo.MessageEmbed{
-					Title:       "Успішно",
-					Color:       0x0ea901,
-					Description: "> Тепер можете користуватись тільки логуванням входу/виходу/банів на сервер",
-					Footer: &discordgo.MessageEmbedFooter{
-						Text:    "Kazaki",
-						IconURL: "https://i.imgur.com/04X5nxH.png",
-					},
-				}
-				response = &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Flags:  discordgo.MessageFlagsEphemeral,
-						Embeds: []*discordgo.MessageEmbed{embed_AllOne},
-					},
-				}
-				err = s.InteractionRespond(ic.Interaction, response)
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-				}
+				statement, _ := database.Prepare("UPDATE servers SET channel_log_serverID = ? WHERE id = ?")
+				statement.Exec(OneValue, ic.GuildID)
+				defer statement.Close()
+
+			}
+			embed_AllOne := &discordgo.MessageEmbed{
+				Title:       "Успішно",
+				Color:       0x0ea901,
+				Description: "> Тепер можете користуватись тільки логуванням входу/виходу/банів на сервер",
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    "Kazaki",
+					IconURL: "https://i.imgur.com/04X5nxH.png",
+				},
+			}
+			response = &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags:  discordgo.MessageFlagsEphemeral,
+					Embeds: []*discordgo.MessageEmbed{embed_AllOne},
+				},
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Помилка при завантаженні конфігураційного файлу", err)
 			}
 		}
 	})
-}
-func RoleAddByEmoji(s *discordgo.Session, m *discordgo.MessageReactionAdd) {
-	cfg, err := ini.Load("servers/" + m.GuildID + "/config.ini")
-	if err != nil {
-		_, _, lineNumber, _ := runtime.Caller(0)
-		ErrorWriter(err, "Помилка при завантаженні конфігураційного файлу", lineNumber)
-		return
-	}
-	section := cfg.Section("EMOJI_REACTIONS")
-	MessageReactionAddID := section.Key("MESSAGE_REACTION_ID").String()
-	EmojiReaction := section.Key("EMOJI_REACTION").String()
-	addroleID := section.Key("ROLE_ADD_ID").String()
-	switch {
-	case len(MessageReactionAddID) != 19:
-		return
-	case len(addroleID) != 19:
-		return
-	}
-	if m.MessageID == MessageReactionAddID {
-		// Перевіряємо, чи це потрібна реакція (emoji)
-		if m.Emoji.Name == EmojiReaction {
-			// Отримуємо ID користувача, який натиснув реакцію
-			userID := m.UserID
-			member, err := s.GuildMember(m.GuildID, userID)
-			if err != nil {
-				_, _, lineNumber, _ := runtime.Caller(0)
-				ErrorWriter(err, "Помилка отримання учасника", lineNumber)
-				return
-			}
-
-			// Перевіряємо, чи користувач має певну роль
-			hasRole := false
-			for _, role := range member.Roles {
-				if role == addroleID {
-					hasRole = true
-					break
-				}
-			}
-			if hasRole {
-				// Користувач має певну роль, надсилаємо йому приватне повідомлення
-				guild, err := s.Guild(m.GuildID)
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка при отриманні інформації про сервер", lineNumber)
-					return
-				}
-				currentTime := time.Now()
-				stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
-				channel, err := s.UserChannelCreate(userID)
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка створення каналу", lineNumber)
-					return
-				}
-				// Надсилання приватного повідомлення
-				embed := &discordgo.MessageEmbed{
-					Title: "Помилка",
-					Description: fmt.Sprintf(
-						">>> Вам вже видана роль! Якщо ролі немає - зверніться до адміністрації серверу: "+"`%s`",
-						guild.Name,
-					),
-					Thumbnail: &discordgo.MessageEmbedThumbnail{
-						URL: "https://i.imgur.com/BKYSMoP.png",
-					},
-					Color:     0xf5b507, // Колір (у форматі HEX)
-					Timestamp: stringTime,
-				}
-				_, err = s.ChannelMessageSendEmbed(channel.ID, embed)
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка надсилання повідомлення", lineNumber)
-					return
-				}
-			} else {
-				err = s.GuildMemberRoleAdd(m.GuildID, userID, addroleID)
-				if err != nil {
-					_, _, lineNumber, _ := runtime.Caller(0)
-					ErrorWriter(err, "Помилка додавання ролі", lineNumber)
-					return
-				}
-			}
-		}
-	}
 }

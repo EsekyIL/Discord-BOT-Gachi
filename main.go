@@ -58,12 +58,15 @@ func main() {
 	token := goDotEnvVariable("API_KEY")
 	userChannels := make(map[string]string)
 	userTimeJoinVoice := make(map[string]string)
-	sess, _ := discordgo.New("Bot " + token) // Відкриття сессії з ботом
+	sess, _ := discordgo.New("Bot " + token)
 
-	registerCommands(sess)
+	registerCommands(sess, database)
 
 	sess.StateEnabled = true
 	sess.State.MaxMessageCount = 1000
+	sess.State.TrackVoice = true
+	sess.State.TrackMembers = true
+	sess.State.TrackRoles = true
 
 	sess.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
 		rows, _ := database.Query("SELECT id, name, members FROM servers WHERE id = ?", g.Guild.ID)
@@ -91,7 +94,7 @@ func main() {
 		go MsgUpdate(s, m, database)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) { // Модуль логування видаленого повідомлення
-		go MessageDeleteLog(s, m)
+		go MsgDelete(s, m, database)
 	})
 	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) { // Модуль логування входу/переходу/виходу в голосових каналах
 		go VoiceLog(s, vs, &userChannels, &userTimeJoinVoice)
