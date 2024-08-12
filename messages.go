@@ -10,34 +10,8 @@ import (
 )
 
 func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.DB) {
-	rows, err := database.Query("SELECT id, channel_log_msgID FROM servers WHERE id = ?", m.GuildID)
-	if err != nil {
-		Error("Щось сталось", err)
-		return // Зупиняємо виконання у разі помилки
-	}
-	defer func() {
-		if rows != nil {
-			rows.Close()
-		}
-	}()
-
-	var id int
-	var channel_log_msgID int
-
-	if rows.Next() {
-		err := rows.Scan(&id, &channel_log_msgID)
-		if err != nil {
-			Error("Failed to scan the row", err)
-			return
-		}
-	} else {
-		if err := rows.Err(); err != nil {
-			Error("Failed during iteration over rows", err)
-		}
-		return
-	}
-
-	if id == 0 {
+	channel_log_msgID := SelectDB("channel_log_msgID", m.GuildID, database)
+	if channel_log_msgID == 0 {
 		return
 	}
 
@@ -62,6 +36,9 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 			">>> **Канал: **"+"<#%s>"+"\n"+"**Автор: **"+"<@%s>"+"\n"+"**Айді повідомлення: **"+"`%s`",
 			m.ChannelID, m.Author.ID, m.Message.ID,
 		),
+		Thumbnail: &discordgo.MessageEmbedThumbnail{
+			URL: "https://i.imgur.com/YAaOfS6.png",
+		},
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    m.Author.Username,
 			IconURL: m.Author.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
@@ -74,34 +51,8 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 
 }
 func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.DB) {
-	rows, err := database.Query("SELECT id, channel_log_msgID FROM servers WHERE id = ?", m.GuildID)
-	if err != nil {
-		Error("Щось сталось", err)
-		return // Зупиняємо виконання у разі помилки
-	}
-	defer func() {
-		if rows != nil {
-			rows.Close()
-		}
-	}()
-
-	var id int
-	var channel_log_msgID int
-
-	if rows.Next() {
-		err := rows.Scan(&id, &channel_log_msgID)
-		if err != nil {
-			Error("Failed to scan the row", err)
-			return
-		}
-	} else {
-		if err := rows.Err(); err != nil {
-			Error("Failed during iteration over rows", err)
-		}
-		return
-	}
-
-	if id == 0 {
+	channel_log_msgID := SelectDB("channel_log_msgID", m.GuildID, database)
+	if channel_log_msgID == 0 {
 		return
 	}
 
@@ -122,12 +73,12 @@ func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.D
 			m.ChannelID, m.BeforeDelete.Author.ID, m.Message.ID,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: "https://i.imgur.com/70d2SGt.png",
+			URL: "https://i.imgur.com/lP2JsWQ.png",
 		},
 		Color:     0xed5f5f, // Колір (у форматі HEX)
 		Timestamp: stringTime,
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_msgID), embed)
+	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_msgID), embed)
 	if err != nil {
 		fmt.Println("error getting member:", err)
 		return

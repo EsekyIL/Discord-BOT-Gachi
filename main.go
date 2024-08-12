@@ -39,6 +39,34 @@ func Error(msg string, err error) {
 	logger.Error(msg, "Помилка", err)
 }
 
+func SelectDB(select_row string, GuildID string, database *sql.DB) int {
+	query := fmt.Sprintf("SELECT id, %s FROM servers WHERE id = ?", select_row)
+	rows, err := database.Query(query, GuildID)
+	if err != nil {
+		Error("Щось сталось", err)
+		return 0 // Повертаємо 0 у разі помилки
+	}
+	defer rows.Close()
+
+	var id int
+	var channel_log int
+
+	if rows.Next() {
+		err := rows.Scan(&id, &channel_log)
+		if err != nil {
+			Error("Failed to scan the row", err)
+			return 0
+		}
+	} else {
+		if err := rows.Err(); err != nil {
+			Error("Failed during iteration over rows", err)
+		}
+		return 0
+	}
+
+	return channel_log
+}
+
 func main() {
 	database, err := sql.Open("sqlite", "./gopher.db")
 	if err != nil {
@@ -56,8 +84,6 @@ func main() {
 	}
 
 	token := goDotEnvVariable("API_KEY")
-	userChannels := make(map[string]string)
-	userTimeJoinVoice := make(map[string]string)
 	sess, _ := discordgo.New("Bot " + token)
 
 	registerCommands(sess, database)
@@ -97,25 +123,18 @@ func main() {
 		go MsgDelete(s, m, database)
 	})
 	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) { // Модуль логування входу/переходу/виходу в голосових каналах
-		go VoiceLog(s, vs, &userChannels, &userTimeJoinVoice)
+		go VoiceLog(s, vs, database)
+	})
+	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InviteCreate) {
+		go InvCreate(s, ic, database)
 	})
 	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) { // Модуль логування надходження користувачів на сервер
-		go InvitePeopleToServer(s, gma)
+
 	})
 	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) { // Модуль логування виходу користувачів з серверу
-		go ExitPeopleFromServer(s, gmr)
+
 	})
 	sess.AddHandler(func(s *discordgo.Session, b *discordgo.GuildBanAdd) { // Модуль логування бану користувачів на сервер
-		// Створення об'єкта для представлення забаненого користувача
-		ba, err := s.GuildBan(b.GuildID, b.User.ID)
-		if err != nil {
-			// Обробка помилки, якщо не вдається отримати інформацію про забаненого користувача
-			fmt.Println("Помилка при отриманні даних про забаненого користувача:", err)
-			return
-		}
-
-		// Виклик функції для обробки події бану користувача
-		go BanUserToServer(s, b, ba)
 	})
 	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers // Доп. дозволи
 
