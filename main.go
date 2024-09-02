@@ -106,7 +106,7 @@ func SelectDB(select_row string, GuildID string, database *sql.DB) int {
 
 func main() {
 	// Формуємо DSN (Data Source Name) строку
-	dsn := "eseky236_root:b7gmsqLS@tcp(ftp211.hostia.name)/eseky236_gachi"
+	dsn := goDotEnvVariable("DSN")
 
 	// Підключаємося до бази даних
 	database, err := sql.Open("mysql", dsn)
