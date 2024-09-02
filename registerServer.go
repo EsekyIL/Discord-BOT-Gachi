@@ -11,10 +11,15 @@ import (
 )
 
 func registerServer(g *discordgo.GuildCreate, database *sql.DB) {
-	statement, _ := database.Prepare("INSERT INTO servers (id, name, members, channel_log_msgID, channel_log_voiceID, channel_log_serverID) VALUES (?, ?, ?, ?, ?, ?)")
-	statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0)
-
+	statement, err := database.Prepare("INSERT INTO servers (id, name, members, channel_log_msgID, channel_log_voiceID, channel_log_serverID, channel_log_punishmentID, BeforeEntryID ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	if err != nil {
+		Error("Проблемс", err)
+	}
 	defer statement.Close()
+	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0, 0, "")
+	if err != nil {
+		Error("Error executing statement", err)
+	}
 
 	logger := slog.New(tint.NewHandler(os.Stderr, nil))
 

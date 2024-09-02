@@ -28,7 +28,7 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sq
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
 			},
-			Color:     0xc4eb6a, // Колір (у форматі HEX)
+			Color:     0x5fc437, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
 
@@ -49,7 +49,7 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sq
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
 			},
-			Color:     0xeb6a6a, // Колір (у форматі HEX)
+			Color:     0xc43737, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
 		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
@@ -66,7 +66,7 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sq
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
 			},
-			Color:     0xeb6aba, // Колір (у форматі HEX)
+			Color:     0x37c4b8, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
 		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)

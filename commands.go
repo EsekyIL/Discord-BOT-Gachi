@@ -320,7 +320,7 @@ func registerCommands(sess *discordgo.Session, database *sql.DB) {
 				}
 				err = s.InteractionRespond(ic.Interaction, response)
 				if err != nil {
-					Error("Помилка при завантаженні конфігураційного файлу", err)
+					Error("", err)
 				}
 			}
 			if ic.MessageComponentData().CustomID == "fd_message" {
@@ -346,7 +346,7 @@ func registerCommands(sess *discordgo.Session, database *sql.DB) {
 				}
 				err = s.InteractionRespond(ic.Interaction, response)
 				if err != nil {
-					Error("Помилка при завантаженні конфігураційного файлу", err)
+					Error("", err)
 				}
 			}
 			if ic.MessageComponentData().CustomID == "fd_voice" {
@@ -372,7 +372,7 @@ func registerCommands(sess *discordgo.Session, database *sql.DB) {
 				}
 				err = s.InteractionRespond(ic.Interaction, response)
 				if err != nil {
-					Error("Помилка при завантаженні конфігураційного файлу", err)
+					Error("", err)
 				}
 			}
 			if ic.MessageComponentData().CustomID == "fd_event" {
@@ -399,7 +399,7 @@ func registerCommands(sess *discordgo.Session, database *sql.DB) {
 			}
 			err = s.InteractionRespond(ic.Interaction, response)
 			if err != nil {
-				Error("Помилка при завантаженні конфігураційного файлу", err)
+				Error("", err)
 			}
 		}
 	})

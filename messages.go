@@ -43,7 +43,7 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 			Text:    m.Author.Username,
 			IconURL: m.Author.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
 		},
-		Color:     0xeda15f, // Колір (у форматі HEX)
+		Color:     0x37c4b8, // Колір (у форматі HEX)
 		Timestamp: stringTime,
 	}
 
@@ -52,7 +52,7 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 }
 func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.DB) {
 	channel_log_msgID := SelectDB("channel_log_msgID", m.GuildID, database)
-	if channel_log_msgID == 0 {
+	if channel_log_msgID == 0 && m.Author.Bot {
 		return
 	}
 
@@ -72,10 +72,7 @@ func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.D
 			">>> **Канал: **"+"<#%s>"+"\n"+"**Автор: **"+"<@%s>"+"\n"+"**Айді повідомлення: **"+"`%s`",
 			m.ChannelID, m.BeforeDelete.Author.ID, m.Message.ID,
 		),
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: "https://i.imgur.com/lP2JsWQ.png",
-		},
-		Color:     0xed5f5f, // Колір (у форматі HEX)
+		Color:     0xc43737, // Колір (у форматі HEX)
 		Timestamp: stringTime,
 	}
 	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_msgID), embed)
