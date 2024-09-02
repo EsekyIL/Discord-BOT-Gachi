@@ -36,9 +36,6 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 			">>> **Канал: **"+"<#%s>"+"\n"+"**Автор: **"+"<@%s>"+"\n"+"**Айді повідомлення: **"+"`%s`",
 			m.ChannelID, m.Author.ID, m.Message.ID,
 		),
-		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: "https://i.imgur.com/YAaOfS6.png",
-		},
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    m.Author.Username,
 			IconURL: m.Author.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)

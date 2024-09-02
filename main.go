@@ -1,8 +1,10 @@
 package main
 
 import (
+	"crypto/md5"
 	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"log/slog"
@@ -14,6 +16,7 @@ import (
 
 	"github.com/bwmarrin/discordgo"
 	_ "github.com/glebarez/sqlite"
+	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	"github.com/lmittmann/tint"
 )
@@ -44,6 +47,12 @@ func generateCode(length int) (string, error) {
 		// Якщо код вже існує, генеруємо новий
 	}
 }
+func shortenNumber(number string) string {
+	hasher := md5.New()
+	hasher.Write([]byte(number))
+	hash := hasher.Sum(nil)
+	return hex.EncodeToString(hash)[:8] // Обрізаємо до 8 символів
+}
 func goDotEnvVariable(key string) string {
 
 	// завантажити файл .env
@@ -68,7 +77,7 @@ func Error(msg string, err error) {
 }
 
 func SelectDB(select_row string, GuildID string, database *sql.DB) int {
-	query := fmt.Sprintf("SELECT id, %s FROM servers WHERE id = ?", select_row)
+	query := fmt.Sprintf("SELECT id, %s FROM %s WHERE id = ?", select_row, shortenNumber(GuildID))
 	rows, err := database.Query(query, GuildID)
 	if err != nil {
 		Error("Щось сталось", err)
@@ -96,6 +105,27 @@ func SelectDB(select_row string, GuildID string, database *sql.DB) int {
 }
 
 func main() {
+	// Формуємо DSN (Data Source Name) строку
+	dsn := "eseky236_root:b7gmsqLS@tcp(ftp211.hostia.name)/eseky236_gachi"
+
+	// Підключаємося до бази даних
+	database, err := sql.Open("mysql", dsn)
+	if err != nil {
+		fmt.Println("Error opening database connection:", err)
+		return
+	}
+
+	defer database.Close()
+
+	err = database.Ping()
+	if err != nil {
+		fmt.Println("Error pinging database:", err)
+		return
+	}
+	// Перевіряємо з'єднання
+
+	fmt.Println("Successfully connected to the database!")
+
 	logger := slog.New(tint.NewHandler(os.Stderr, nil))
 	// set global logger with custom options
 	slog.SetDefault(slog.New(
@@ -106,23 +136,10 @@ func main() {
 		}),
 	))
 
-	database, err := sql.Open("sqlite", "./gopher.db")
-	if err != nil {
-		Error("Failed to open the database", err)
-	}
-	defer database.Close()
-
-	statement, _ := database.Prepare("CREATE TABLE IF NOT EXISTS servers (id INTEGER PRIMARY KEY, name TEXT, members INTEGER, channel_log_msgID INTEGER, channel_log_voiceID INTEGER, channel_log_serverID INTEGER, channel_log_punishmentID INTEGER, BeforeEntryID TEXT)")
-	defer statement.Close()
-	_, err = statement.Exec()
-	if err != nil {
-		Error("Failed to execute the SQL statement", err)
-	}
-
 	token := goDotEnvVariable("API_KEY")
 	sess, _ := discordgo.New("Bot " + token)
 
-	go registerCommands(sess, database)
+	registerCommands(sess)
 
 	sess.StateEnabled = true
 	sess.State.MaxMessageCount = 1000
@@ -131,23 +148,20 @@ func main() {
 	sess.State.TrackRoles = true
 
 	sess.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
-		rows, _ := database.Query("SELECT id, name, members FROM servers WHERE id = ?", g.Guild.ID)
-		var id int
-		var name string
-		var members int
-
-		if rows.Next() {
-			err = rows.Scan(&id, &name, &members)
-			if err != nil {
-				Error("Failed to scan the row", err)
-			}
-		} else {
-			if err := rows.Err(); err != nil {
-				Error("Failed during iteration over rows", err)
-			}
-			go registerServer(g, database) // Виклик функції для реєстрації сервера, якщо дані не знайдено
+		query := fmt.Sprintf("SHOW TABLES LIKE '%s'", shortenNumber(g.Guild.ID))
+		rows, err := database.Query(query)
+		if err != nil {
+			fmt.Println("Error executing query:", err)
 			return
 		}
+		defer rows.Close()
+
+		// Перевіряємо, чи таблиця існує
+		if rows.Next() {
+			return
+		}
+		go registerServer(g, database) // Виклик функції для реєстрації сервера, якщо дані не знайдено
+
 	})
 	/*sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль логування оновленого повідомлення
 		if m.Author == nil || m.Author.Bot {
@@ -185,6 +199,9 @@ func main() {
 			_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
 		}
 	})*/
+	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+		Commands(s, ic, database)
+	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		if m.Author == nil || m.Author.Bot {
 			return

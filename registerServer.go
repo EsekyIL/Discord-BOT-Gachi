@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"fmt"
 	"log/slog"
 	"os"
 	"time"
@@ -11,16 +12,39 @@ import (
 )
 
 func registerServer(g *discordgo.GuildCreate, database *sql.DB) {
-	statement, err := database.Prepare("INSERT INTO servers (id, name, members, channel_log_msgID, channel_log_voiceID, channel_log_serverID, channel_log_punishmentID, BeforeEntryID ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+	// Формування SQL-запиту для створення таблиці
+	query := fmt.Sprintf(`
+CREATE TABLE IF NOT EXISTS %s (
+    id BIGINT PRIMARY KEY, 
+    name VARCHAR(255), 
+    members INTEGER, 
+    channel_log_msgID VARCHAR(255), 
+    channel_log_voiceID VARCHAR(255), 
+    channel_log_serverID VARCHAR(255), 
+    channel_log_punishmentID VARCHAR(255), 
+    Language VARCHAR(10)
+)`, shortenNumber(g.Guild.ID))
+	_, err := database.Exec(query)
 	if err != nil {
-		Error("Проблемс", err)
-	}
-	defer statement.Close()
-	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0, 0, "")
-	if err != nil {
-		Error("Error executing statement", err)
+		fmt.Println("Error creating table:", err)
 	}
 
+	// Формування SQL-запиту для вставки даних
+	query = fmt.Sprintf(`INSERT INTO %s (id, name, members, channel_log_msgID, channel_log_voiceID, channel_log_serverID, channel_log_punishmentID, Language) VALUES (?,?, ?, ?, ?, ?, ?, ?)`, shortenNumber(g.Guild.ID))
+
+	// Підготовка запиту для вставки даних
+	statement, err := database.Prepare(query)
+	if err != nil {
+		Error("Проблемс", err)
+		return
+	}
+	defer statement.Close()
+
+	// Виконання запиту на вставку даних
+	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0, 0, "UA")
+	if err != nil {
+		Error("Error executing INSERT statement", err)
+	}
 	logger := slog.New(tint.NewHandler(os.Stderr, nil))
 
 	// set global logger with custom options
