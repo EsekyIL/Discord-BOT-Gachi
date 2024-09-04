@@ -29,10 +29,12 @@ func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate, database *sql.D
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID := SelectDB("channel_log_serverID", ic.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", ic.GuildID, database)
 	if channel_log_serverID == 0 {
 		return
 	}
+
+	trs := getTranslation(lang)
 
 	MaxUses := strconv.Itoa(ic.MaxUses)
 	if MaxUses == "0" {
@@ -44,10 +46,10 @@ func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate, database *sql.D
 		expiresAt = 2147483647
 	}
 	embed := &discordgo.MessageEmbed{
-		Title: "Створено запрошення",
+		Title: trs.InviteCreated,
 		Description: fmt.Sprintf(
-			">>> **Код: **"+"`%s`"+"\n"+"**Канал: **"+"<#%s>"+"\n"+"**Термін дії: **"+"<t:%d:R>"+"\n"+"**К-сть користувачів: **"+"%s",
-			ic.Code, ic.ChannelID, expiresAt, MaxUses,
+			">>> **%s: **"+"`%s`"+"\n"+"**%s: **"+"<#%s>"+"\n"+"**%s: **"+"<t:%d:R>"+"\n"+"**%s: **"+"%s",
+			trs.Code, ic.Code, trs.Channel, ic.ChannelID, trs.ValidityPeriod, expiresAt, trs.CountUser, MaxUses,
 		),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    ic.Inviter.Username,
@@ -62,18 +64,19 @@ func UserJoin(s *discordgo.Session, gma *discordgo.GuildMemberAdd, database *sql
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID := SelectDB("channel_log_serverID", gma.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", gma.GuildID, database)
 	if channel_log_serverID == 0 {
 		return
 	}
 
+	trs := getTranslation(lang)
 	userCreatedAt := getCreationTime(gma.User.ID)
 
 	embed := &discordgo.MessageEmbed{
-		Title: "Новий користувач",
+		Title: trs.NewUser,
 		Description: fmt.Sprintf(
-			">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n"+"**Створений: **"+"<t:%d:R>"+"\n",
-			gma.User.ID, gma.User.ID, int64(userCreatedAt.Unix()),
+			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"<t:%d:R>"+"\n",
+			trs.User, gma.User.ID, trs.ID, gma.User.ID, trs.Created, int64(userCreatedAt.Unix()),
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: gma.AvatarURL("256"),
@@ -110,12 +113,6 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *
 		UserID = entry.UserID
 		Reason = entry.Reason
 
-		println("UserID:", entry.UserID)
-		println("Reason:", entry.Reason)
-		println("Entry ID:", entry.ID)
-		println("Current BeforeEntry:", BeforeEntry)
-		println("------------------------")
-
 		if BeforeEntry == entry.ID && BeforeEntry > "" {
 			kick = false
 			println("Match found: BeforeEntry equals entry.ID, kick set to false")
@@ -137,29 +134,29 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *
 
 	}
 
-	println("Final BeforeEntry:", BeforeEntry)
-	println("Final kick value:", kick)
-
 	UserInfo, _ := s.User(UserID)
 
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID := SelectDB("channel_log_serverID", gmr.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", gmr.GuildID, database)
+
 	if channel_log_serverID == 0 {
 		return
 	}
+	trs := getTranslation(lang)
 	if kick {
-		channel_log_punishmentID := SelectDB("channel_log_punishmentID", gmr.GuildID, database)
+		channel_log_punishmentID, _ := SelectDB("channel_log_punishmentID", gmr.GuildID, database)
+
 		code, err := generateCode(6)
 		if err != nil {
 			Error("Помилка генерації коду", err)
 		}
 		embed := &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("Кік "+"`%s`", code),
+			Title: fmt.Sprintf("%s "+"`%s`", trs.Kick, code),
 			Description: fmt.Sprintf(
-				">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n"+"**Причина: **"+"__***%s***__",
-				gmr.User.ID, gmr.User.ID, Reason,
+				">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"__***%s***__",
+				trs.User, gmr.User.ID, trs.ID, gmr.User.ID, trs.Reason, Reason,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: gmr.AvatarURL("256"),
@@ -172,13 +169,13 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *
 			Timestamp: stringTime,
 		}
 		message, _ := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_punishmentID), embed)
-		ActionType = fmt.Sprintf("[**Kicked**]"+"(https://discord.com/channels/%s/%s/%s)", gmr.GuildID, message.ChannelID, message.ID)
+		ActionType = fmt.Sprintf("[**%s**]"+"(https://discord.com/channels/%s/%s/%s)", trs.Kick, gmr.GuildID, message.ChannelID, message.ID)
 	}
 	embed := &discordgo.MessageEmbed{
-		Title: "Користувач покинув гільдію",
+		Title: trs.UserLeftGuild,
 		Description: fmt.Sprintf(
-			">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n"+"%s",
-			gmr.User.ID, gmr.User.ID, ActionType,
+			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"%s",
+			trs.User, gmr.User.ID, trs.ID, gmr.User.ID, ActionType,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: gmr.AvatarURL("256"),
@@ -211,27 +208,28 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID := SelectDB("channel_log_serverID", ban.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", ban.GuildID, database)
 	if channel_log_serverID == 0 {
 		return
 	}
 
+	trs := getTranslation(lang)
 	UserInfo, _ := s.User(UserID)
 
-	channel_log_punishmentID := SelectDB("channel_log_punishmentID", ban.GuildID, database)
+	channel_log_punishmentID, _ := SelectDB("channel_log_punishmentID", ban.GuildID, database)
 	code, err := generateCode(6)
 	if err != nil {
 		Error("Помилка генерації коду", err)
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("Бан "+"`%s`", code),
+		Title: fmt.Sprintf("%s "+"`%s`", trs.Ban, code),
 		Description: fmt.Sprintf(
-			">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n"+"**Причина: **"+"__***%s***__"+"\n",
-			ban.User.ID, ban.User.ID, Reason,
+			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"__***%s***__"+"\n",
+			trs.User, ban.User.ID, trs.ID, ban.User.ID, trs.Reason, Reason,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
-			URL: UserInfo.AvatarURL("256"),
+			URL: ban.User.AvatarURL("256"),
 		},
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    UserInfo.Username,
@@ -243,10 +241,10 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_punishmentID), embed)
 
 	embed = &discordgo.MessageEmbed{
-		Title: "Користувач покинув гільдію",
+		Title: trs.UserLeftGuild,
 		Description: fmt.Sprintf(
-			">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n"+"%s",
-			ban.User.ID, ban.User.ID, ActionType,
+			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"%s",
+			trs.User, ban.User.ID, trs.ID, ban.User.ID, ActionType,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: ban.User.AvatarURL("256"),
@@ -257,9 +255,10 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 }
 func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database *sql.DB) {
+	channel_log_punishmentID, lang := SelectDB("channel_log_punishmentID", mute.GuildID, database)
+	trs := getTranslation(lang)
 
 	if mute.BeforeUpdate != nil {
-		fmt.Printf("aeza %s", mute.BeforeUpdate.CommunicationDisabledUntil)
 		AuditLog, err := s.GuildAuditLog(mute.GuildID, "", "", 24, 1)
 		if err != nil {
 			log.Printf("AUDIT ERROR: %v", err)
@@ -283,13 +282,11 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database
 
 		UserInfo, _ := s.User(UserID)
 
-		channel_log_punishmentID := SelectDB("channel_log_punishmentID", mute.GuildID, database)
-
 		embed := &discordgo.MessageEmbed{
-			Title: "Размут",
+			Title: trs.UnMute,
 			Description: fmt.Sprintf(
-				">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n"+"\n"+"**Час зняття обмеження: **"+"<t:%d:R>",
-				mute.User.ID, mute.User.ID, mute.BeforeUpdate.CommunicationDisabledUntil.Unix(),
+				">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"\n"+"**%s: **"+"<t:%d:R>",
+				trs.User, mute.User.ID, trs.ID, mute.User.ID, trs.TimeRemove, mute.BeforeUpdate.CommunicationDisabledUntil.Unix(),
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: mute.AvatarURL("256"),
@@ -330,17 +327,16 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database
 
 		UserInfo, _ := s.User(UserID)
 
-		channel_log_punishmentID := SelectDB("channel_log_punishmentID", mute.GuildID, database)
 		code, err := generateCode(6)
 		if err != nil {
 			Error("Помилка генерації коду", err)
 		}
 
 		embed := &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("Мут "+"`%s`", code),
+			Title: fmt.Sprintf("%s "+"`%s`", trs.Mute, code),
 			Description: fmt.Sprintf(
-				">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n"+"**Причина: **"+"__***%s***__"+"\n"+"**Час зняття обмеження: **"+"<t:%d:R>",
-				mute.User.ID, mute.User.ID, Reason, mute.CommunicationDisabledUntil.Unix(),
+				">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"__***%s***__"+"\n"+"**%s: **"+"<t:%d:R>",
+				trs.User, mute.User.ID, trs.ID, mute.User.ID, trs.Reason, Reason, trs.TimeRemove, mute.CommunicationDisabledUntil.Unix(),
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: mute.AvatarURL("256"),
@@ -375,13 +371,15 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove, databas
 
 	UserInfo, _ := s.User(UserID)
 
-	channel_log_punishmentID := SelectDB("channel_log_punishmentID", unban.GuildID, database)
+	channel_log_punishmentID, lang := SelectDB("channel_log_punishmentID", unban.GuildID, database)
+
+	trs := getTranslation(lang)
 
 	embed := &discordgo.MessageEmbed{
-		Title: "Разбан",
+		Title: trs.UnBan,
 		Description: fmt.Sprintf(
-			">>> **Користувач: **"+"<@%s>"+"\n"+"**Айді: **"+"`%s`"+"\n",
-			unban.User.ID, unban.User.ID,
+			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n",
+			trs.User, unban.User.ID, trs.ID, unban.User.ID,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: unban.User.AvatarURL("256"),

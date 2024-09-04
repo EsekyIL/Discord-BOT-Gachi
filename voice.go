@@ -10,7 +10,7 @@ import (
 )
 
 func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sql.DB) {
-	channel_log_voiceID := SelectDB("channel_log_voiceID", vs.GuildID, database)
+	channel_log_voiceID, lang := SelectDB("channel_log_voiceID", vs.GuildID, database)
 	if channel_log_voiceID == 0 {
 		return
 	}
@@ -18,12 +18,14 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sq
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
+	trs := getTranslation(lang)
+
 	if vs.BeforeUpdate == nil {
 		embed := &discordgo.MessageEmbed{
-			Title: "Користувач зайшов у кімнату",
+			Title: trs.UserJoinVoice,
 			Description: fmt.Sprintf(
-				">>> **Канал: **"+"<#%s>"+"\n"+"**Користувач: **"+"<@%s>",
-				vs.ChannelID, vs.Member.User.ID,
+				">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>",
+				trs.Channel, vs.ChannelID, trs.User, vs.Member.User.ID,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
@@ -40,11 +42,11 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sq
 	}
 	if vs.ChannelID == "" {
 		embed := &discordgo.MessageEmbed{
-			Title: "Користувач вийшов з кімнати",
+			Title: trs.UserLeftVoice,
 
 			Description: fmt.Sprintf(
-				">>> **Канал: **"+"<#%s>"+"\n"+"**Користувач: **"+"<@%s>",
-				vs.BeforeUpdate.ChannelID, vs.Member.User.ID,
+				">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>",
+				trs.Channel, vs.BeforeUpdate.ChannelID, trs.User, vs.Member.User.ID,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
@@ -58,10 +60,10 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sq
 	}
 	if vs.BeforeUpdate.ChannelID != vs.ChannelID {
 		embed := &discordgo.MessageEmbed{
-			Title: "Користувач перейшов у другу кімнату",
+			Title: trs.UserMovedVoice,
 			Description: fmt.Sprintf(
-				">>> **Стара кімната: **"+"<#%s>"+"\n"+"**Нова кімната: **"+"<#%s>"+"\n"+"**Користувач: **"+"<@%s>",
-				vs.BeforeUpdate.ChannelID, vs.ChannelID, vs.Member.User.ID,
+				">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>",
+				trs.OldRoom, vs.BeforeUpdate.ChannelID, trs.NewRoom, vs.ChannelID, trs.User, vs.Member.User.ID,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),

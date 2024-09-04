@@ -10,7 +10,7 @@ import (
 )
 
 func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.DB) {
-	channel_log_msgID := SelectDB("channel_log_msgID", m.GuildID, database)
+	channel_log_msgID, lang := SelectDB("channel_log_msgID", m.GuildID, database)
 	if channel_log_msgID == 0 {
 		return
 	}
@@ -18,23 +18,25 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
+	trs := getTranslation(lang)
+
 	embed := &discordgo.MessageEmbed{
-		Title: "Повідомлення оновлено",
+		Title: trs.MessageUpdated,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "**Було**",
+				Name:   fmt.Sprintf("**%s**", trs.Was),
 				Value:  m.BeforeUpdate.Content,
 				Inline: true,
 			},
 			{
-				Name:   "**Стало**",
+				Name:   fmt.Sprintf("**%s**", trs.NowIs),
 				Value:  m.Content,
 				Inline: true,
 			},
 		},
 		Description: fmt.Sprintf(
-			">>> **Канал: **"+"<#%s>"+"\n"+"**Автор: **"+"<@%s>"+"\n"+"**Айді повідомлення: **"+"`%s`",
-			m.ChannelID, m.Author.ID, m.Message.ID,
+			">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>"+"\n"+"**%s: **"+"[%s](https://discord.com/channels/%s/%s/%s)",
+			trs.Channel, m.ChannelID, trs.Author, m.Author.ID, trs.MessageID, m.Message.ID, m.GuildID, m.ChannelID, m.ID,
 		),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    m.Author.Username,
@@ -48,7 +50,7 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 
 }
 func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.DB) {
-	channel_log_msgID := SelectDB("channel_log_msgID", m.GuildID, database)
+	channel_log_msgID, lang := SelectDB("channel_log_msgID", m.GuildID, database)
 	if channel_log_msgID == 0 && m.Author.Bot {
 		return
 	}
@@ -56,18 +58,20 @@ func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.D
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
+	trs := getTranslation(lang)
+
 	embed := &discordgo.MessageEmbed{
-		Title: "Видалене повідомлення",
+		Title: trs.MessageDeleted,
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "**Вміст повідомлення**",
+				Name:   fmt.Sprintf("**%s**", trs.MessageContent),
 				Value:  "*" + m.BeforeDelete.Content + "*",
 				Inline: false,
 			},
 		},
 		Description: fmt.Sprintf(
-			">>> **Канал: **"+"<#%s>"+"\n"+"**Автор: **"+"<@%s>"+"\n"+"**Айді повідомлення: **"+"`%s`",
-			m.ChannelID, m.BeforeDelete.Author.ID, m.Message.ID,
+			">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`",
+			trs.Channel, m.ChannelID, trs.Author, m.BeforeDelete.Author.ID, trs.MessageID, m.Message.ID,
 		),
 		Color:     0xc43737, // Колір (у форматі HEX)
 		Timestamp: stringTime,

@@ -23,12 +23,15 @@ func registerCommands(sess *discordgo.Session) {
 	}
 }
 func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *sql.DB) {
+	_, lang := SelectDB("channel_log_voiceID", ic.GuildID, database)
+	trs := getTranslation(lang)
+
 	if ic.Type == discordgo.InteractionApplicationCommand {
 		switch ic.ApplicationCommandData().Name {
 		case "settings":
 			embed := &discordgo.MessageEmbed{
-				Title:       "Налаштування функцій бота",
-				Description: "> Виберіть пункт, який хочете налаштувати",
+				Title:       trs.SettingFunction,
+				Description: fmt.Sprintf("> %s", trs.SelectItem),
 				Thumbnail: &discordgo.MessageEmbedThumbnail{
 					URL: "https://i.imgur.com/o7wcuxw.png",
 				},
@@ -50,10 +53,10 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 								discordgo.SelectMenu{
 									// Select menu, as other components, must have a customID, so we set it to this value.
 									CustomID:    "select",
-									Placeholder: "Виберіть пункт налаштування 👇",
+									Placeholder: trs.SelectSettingItem,
 									Options: []discordgo.SelectMenuOption{
 										{
-											Label: "Логування",
+											Label: trs.Logging,
 											// As with components, this things must have their own unique "id" to identify which is which.
 											// In this case such id is Value field.
 											Value: "logyvanie",
@@ -62,38 +65,20 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 											},
 											// You can also make it a default option, but in this case we won't.
 											Default:     false,
-											Description: "Логування повідомлень, входу/виходу і тд...",
+											Description: trs.EventLogging,
 										},
 										{
-											Label: "Мова/Language",
+											Label: trs.Lang,
 											Value: "Language_Insert",
 											Emoji: discordgo.ComponentEmoji{
 												Name: "🗣️",
 											},
-											Description: "Зміна мови/Language change",
+											Description: trs.ChangeLang,
 										},
 									},
 								},
 							},
 						},
-						/*discordgo.Button{
-							Label:    "UA",
-							Style:    discordgo.SuccessButton,
-							Disabled: false,
-							CustomID: "Language_UA",
-							Emoji: discordgo.ComponentEmoji{
-								Name: "🇺🇦",
-							},
-						},
-						discordgo.Button{
-							Label:    "EU",
-							Style:    discordgo.SuccessButton,
-							Disabled: false,
-							CustomID: "Language_EU",
-							Emoji: discordgo.ComponentEmoji{
-								Name: "🇪🇺",
-							},
-						},*/
 					},
 				},
 			}
@@ -108,8 +93,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 		case "select":
 			selectedValue := ic.MessageComponentData().Values[0]
 			embed := &discordgo.MessageEmbed{
-				Title:       "Налаштування логування серверу",
-				Description: ">>> Виберіть канали для логування. Від `одного` до `трьох`. У будь який момент їх можна змінити. ",
+				Title:       trs.ConfigLogging,
+				Description: fmt.Sprintf(">>> %s", trs.ChannelsLog),
 				Thumbnail: &discordgo.MessageEmbedThumbnail{
 					URL: "https://i.imgur.com/BKYSMoP.png",
 				},
@@ -120,20 +105,20 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				},
 				Fields: []*discordgo.MessageEmbedField{
 					{
-						Name:  "Вибір першого каналу",
-						Value: "*Перший канал виводить вам `зміну/видалення` повідомлень на сервері.*",
+						Name:  trs.SelectFirstChannel,
+						Value: trs.FirstChannelDescrip,
 					},
 					{
-						Name:  "Вибір другого каналу",
-						Value: "*Другий канал виводить вам `вхід/перехід/вихід` з голосових каналів на сервері.*",
+						Name:  trs.SelectSecondChannel,
+						Value: trs.SecondChannelDescrip,
 					},
 					{
-						Name:  "Вибір третього каналу",
-						Value: "*Третій канал виводить `вхід/вихід/бан` користувача на сервері.*",
+						Name:  trs.SelectThirdChannel,
+						Value: trs.ThirdChannelDescrip,
 					},
 					{
-						Name:  "Вибір каналу",
-						Value: "***Якщо хочете, щоб логування виводилось в один канал, просто виберіть той канал, який вам потрібен!***",
+						Name:  trs.SelectChannel,
+						Value: trs.ChannelDescrip,
 					},
 				},
 			}
@@ -153,7 +138,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										MaxValues:    3,
 										MenuType:     discordgo.ChannelSelectMenu,
 										CustomID:     "channel_select",
-										Placeholder:  "Тута треба тицьнути",
+										Placeholder:  trs.Placeholder,
 										ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
 									},
 								},
@@ -172,7 +157,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
 						Flags:   discordgo.MessageFlagsEphemeral,
-						Content: ">>> *Якщо ви бажаєте змінити мову , натисніть кнопку\nIf you want to change the language, press the button!*",
+						Content: trs.IfChangeLang,
 						Components: []discordgo.MessageComponent{
 							discordgo.ActionsRow{
 								Components: []discordgo.MessageComponent{
@@ -220,12 +205,12 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
 						Flags:   discordgo.MessageFlagsEphemeral,
-						Content: ">>> *Якщо ви хочете всі логи направляти до одного каналу, натисніть кнопку `Усі логи`. Якщо вам потрібне конкретне логування для повідомлень, голосових каналів або подій, виберіть відповідну опцію.*",
+						Content: trs.BigDescrip,
 						Components: []discordgo.MessageComponent{
 							discordgo.ActionsRow{
 								Components: []discordgo.MessageComponent{
 									discordgo.Button{
-										Label:    "Усі логи",
+										Label:    trs.AllLogs,
 										Style:    discordgo.SuccessButton,
 										Disabled: false,
 										CustomID: "fd_yes",
@@ -234,7 +219,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										},
 									},
 									discordgo.Button{
-										Label:    "Повідомлення",
+										Label:    trs.Message,
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_message",
@@ -243,7 +228,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										},
 									},
 									discordgo.Button{
-										Label:    "Голосові канали",
+										Label:    trs.VoiceChannels,
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_voice",
@@ -252,7 +237,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										},
 									},
 									discordgo.Button{
-										Label:    "Події",
+										Label:    trs.Events,
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_event",
@@ -299,9 +284,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				return
 			case 3:
 				embed := &discordgo.MessageEmbed{
-					Title:       "Успішно",
+					Title:       trs.Success,
 					Color:       0x0ea901,
-					Description: "> Тепер можете користуватись логуванням всього серверу",
+					Description: trs.UseAllLogs,
 					Footer: &discordgo.MessageEmbedFooter{
 						Text:    "Kazaki",
 						IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -340,9 +325,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 			}
 		case "fd_yes":
 			embed := &discordgo.MessageEmbed{
-				Title:       "Успішно",
+				Title:       trs.Success,
 				Color:       0x0ea901,
-				Description: "> Тепер можете користуватись логуванням всього серверу лише в один канал",
+				Description: trs.UseAllLogsFirstChannel,
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -380,9 +365,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 		case "fd_message":
 
 			embed := &discordgo.MessageEmbed{
-				Title:       "Успішно",
+				Title:       trs.Success,
 				Color:       0x0ea901,
-				Description: "> Тепер можете користуватись тільки логуванням повідомлень",
+				Description: trs.UseMessageLog,
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -419,9 +404,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 		case "fd_voice":
 
 			embed := &discordgo.MessageEmbed{
-				Title:       "Успішно",
+				Title:       trs.Success,
 				Color:       0x0ea901,
-				Description: "> Тепер можете користуватись тільки логуванням голосових каналів",
+				Description: trs.UseVoiceLog,
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
