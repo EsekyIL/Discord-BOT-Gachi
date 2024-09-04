@@ -192,10 +192,85 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				return
 			}
 		case "Language_EU":
-			println("English")
+			query := fmt.Sprintf(`UPDATE %s SET Language = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+
+			// Використання параметризованих запитів
+			statement, err := database.Prepare(query)
+			if err != nil {
+				fmt.Println("Error preparing statement:", err)
+				return
+			}
+			defer statement.Close()
+
+			// Виконання запиту
+			_, err = statement.Exec("EU", ic.GuildID)
+			if err != nil {
+				fmt.Println("Error executing query:", err)
+			}
+			embed := &discordgo.MessageEmbed{
+				Title:       "Language Change!",
+				Color:       0xffa100,
+				Description: "> Тест",
+				Image: &discordgo.MessageEmbedImage{
+					URL: "https://i.imgur.com/gYaQOEj.jpg",
+				},
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    "Kazaki",
+					IconURL: "https://i.imgur.com/04X5nxH.png",
+				},
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags:  discordgo.MessageFlagsEphemeral,
+					Embeds: []*discordgo.MessageEmbed{embed},
+				},
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("", err)
+			}
 			return
+
 		case "Language_UA":
-			println("Ukraine")
+			query := fmt.Sprintf(`UPDATE %s SET Language = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+
+			// Використання параметризованих запитів
+			statement, err := database.Prepare(query)
+			if err != nil {
+				fmt.Println("Error preparing statement:", err)
+				return
+			}
+			defer statement.Close()
+
+			// Виконання запиту
+			_, err = statement.Exec("UA", ic.GuildID)
+			if err != nil {
+				fmt.Println("Error executing query:", err)
+			}
+			embed := &discordgo.MessageEmbed{
+				Title:       "Мову змінено!",
+				Color:       0xffa100,
+				Description: "> Тест",
+				Image: &discordgo.MessageEmbedImage{
+					URL: "https://i.imgur.com/gYaQOEj.jpg",
+				},
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    "Kazaki",
+					IconURL: "https://i.imgur.com/04X5nxH.png",
+				},
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags:  discordgo.MessageFlagsEphemeral,
+					Embeds: []*discordgo.MessageEmbed{embed},
+				},
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("", err)
+			}
 			return
 		case "channel_select":
 			ChannelsID = ic.MessageComponentData().Values
@@ -280,7 +355,6 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				if err != nil {
 					Error("", err)
 				}
-
 				return
 			case 3:
 				embed := &discordgo.MessageEmbed{

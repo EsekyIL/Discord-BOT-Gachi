@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	defer statement.Close()
 
 	// Виконання запиту на вставку даних
-	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0, 0, "UA")
+	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0, 0, "EU")
 	if err != nil {
 		Error("Error executing INSERT statement", err)
 	}
