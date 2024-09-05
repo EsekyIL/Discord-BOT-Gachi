@@ -146,7 +146,6 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *
 	}
 	trs := getTranslation(lang)
 	if kick {
-		channel_log_punishmentID, _ := SelectDB("channel_log_punishmentID", gmr.GuildID, database)
 
 		code, err := generateCode(6)
 		if err != nil {
@@ -168,7 +167,7 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *
 			Color:     0xc43737, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
-		message, _ := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_punishmentID), embed)
+		message, _ := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 		ActionType = fmt.Sprintf("[**%s**]"+"(https://discord.com/channels/%s/%s/%s)", trs.Kick, gmr.GuildID, message.ChannelID, message.ID)
 	}
 	embed := &discordgo.MessageEmbed{
@@ -216,7 +215,6 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 	trs := getTranslation(lang)
 	UserInfo, _ := s.User(UserID)
 
-	channel_log_punishmentID, _ := SelectDB("channel_log_punishmentID", ban.GuildID, database)
 	code, err := generateCode(6)
 	if err != nil {
 		Error("Помилка генерації коду", err)
@@ -238,7 +236,7 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 		Color:     0xc43737, // Колір (у форматі HEX)
 		Timestamp: stringTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_punishmentID), embed)
+	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 
 	embed = &discordgo.MessageEmbed{
 		Title: trs.UserLeftGuild,
@@ -255,7 +253,7 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 }
 func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database *sql.DB) {
-	channel_log_punishmentID, lang := SelectDB("channel_log_punishmentID", mute.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", mute.GuildID, database)
 	trs := getTranslation(lang)
 
 	if mute.BeforeUpdate != nil {
@@ -298,7 +296,7 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database
 			Color:     0x5fc437, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
-		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_punishmentID), embed)
+		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 	}
 
 	if mute.CommunicationDisabledUntil != nil {
@@ -348,7 +346,7 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database
 			Color:     0xc43737, // Колір (у форматі HEX)
 			Timestamp: stringTime,
 		}
-		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_punishmentID), embed)
+		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 	} else {
 		return
 	}
@@ -371,7 +369,7 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove, databas
 
 	UserInfo, _ := s.User(UserID)
 
-	channel_log_punishmentID, lang := SelectDB("channel_log_punishmentID", unban.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", unban.GuildID, database)
 
 	trs := getTranslation(lang)
 
@@ -391,5 +389,5 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove, databas
 		Color:     0x5fc437, // Колір (у форматі HEX)
 		Timestamp: stringTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_punishmentID), embed)
+	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 }

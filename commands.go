@@ -135,7 +135,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 								Components: []discordgo.MessageComponent{
 									discordgo.SelectMenu{
 										MinValues:    &minValues,
-										MaxValues:    3,
+										MaxValues:    4,
 										MenuType:     discordgo.ChannelSelectMenu,
 										CustomID:     "channel_select",
 										Placeholder:  trs.Placeholder,
@@ -209,11 +209,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 			}
 			embed := &discordgo.MessageEmbed{
 				Title:       "Language Change!",
-				Color:       0xffa100,
-				Description: "> Тест",
-				Image: &discordgo.MessageEmbedImage{
-					URL: "https://i.imgur.com/gYaQOEj.jpg",
-				},
+				Color:       0x5fc437,
+				Description: "> The language was successfully changed",
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -250,11 +247,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 			}
 			embed := &discordgo.MessageEmbed{
 				Title:       "Мову змінено!",
-				Color:       0xffa100,
-				Description: "> Тест",
-				Image: &discordgo.MessageEmbedImage{
-					URL: "https://i.imgur.com/gYaQOEj.jpg",
-				},
+				Color:       0x5fc437,
+				Description: "> Мову було успішно змінено!",
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
