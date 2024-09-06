@@ -15,7 +15,6 @@ import (
 	"time"
 
 	"github.com/bwmarrin/discordgo"
-	_ "github.com/glebarez/sqlite"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	"github.com/lmittmann/tint"
@@ -193,17 +192,17 @@ var translations = map[string]Translations{
 		SelectChannel:          "Вибір каналу",
 		ChannelDescrip:         "***Якщо хочете, щоб логування виводилось в один канал, просто виберіть той канал, який вам потрібен!***",
 		Placeholder:            "Тута треба тицьнути",
-		IfChangeLang:           ">>> *Якщо ви бажаєте змінити мову , натисніть кнопку*",
+		IfChangeLang:           ">>> *Якщо ви бажаєте змінити мову - натисніть кнопку.*",
 		BigDescrip:             ">>> *Якщо ви хочете всі логи направляти до одного каналу, натисніть кнопку `Усі логи`. Якщо вам потрібне конкретне логування для повідомлень, голосових каналів або подій, виберіть відповідну опцію.*",
 		AllLogs:                "Усі логи",
 		Message:                "Повідомлення",
 		VoiceChannels:          "Голосові канали",
 		Events:                 "Події",
 		Success:                "Успішно",
-		UseAllLogs:             "> Тепер можете користуватись логуванням всього серверу",
-		UseAllLogsFirstChannel: "> Тепер можете користуватись логуванням всього серверу лише в один канал",
-		UseMessageLog:          "> Тепер можете користуватись тільки логуванням повідомлень",
-		UseVoiceLog:            "> Тепер можете користуватись тільки логуванням голосових каналів",
+		UseAllLogs:             "> Тепер можете користуватись логуванням всього серверу.",
+		UseAllLogsFirstChannel: "> Тепер можете користуватись логуванням всього серверу лише в один канал.",
+		UseMessageLog:          "> Тепер можете користуватись тільки логуванням повідомлень.",
+		UseVoiceLog:            "> Тепер можете користуватись тільки логуванням голосових каналів.",
 	},
 }
 
@@ -313,16 +312,6 @@ func main() {
 
 	fmt.Println("Successfully connected to the database!")
 
-	logger := slog.New(tint.NewHandler(os.Stderr, nil))
-	// set global logger with custom options
-	slog.SetDefault(slog.New(
-		tint.NewHandler(os.Stderr, &tint.Options{
-			Level:      slog.LevelDebug,
-			TimeFormat: time.Kitchen,
-			AddSource:  true,
-		}),
-	))
-
 	token := goDotEnvVariable("API_KEY")
 	sess, _ := discordgo.New("Bot " + token)
 
@@ -429,7 +418,7 @@ func main() {
 	}
 	defer sess.Close()
 
-	logger.Info("The bot is online!")
+	fmt.Println("The bot is online!")
 
 	sc := make(chan os.Signal, 1) // Вимкнення бота CTRL+C
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
