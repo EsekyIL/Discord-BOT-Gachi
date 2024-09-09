@@ -69,12 +69,12 @@ func registerCommands(sess *discordgo.Session) {
 
 	selectMenu := discordgo.ApplicationCommand{
 		Name:        "settings",
-		Description: "Виберіть опцію в налаштуваннях",
+		Description: "select an option in settings",
 		Type:        discordgo.ChatApplicationCommand,
 	}
-	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &selectMenu) // Створення і відправка команд !
+	_, err := sess.ApplicationCommandCreate("1160175895475138611", "", &selectMenu)
 	if err != nil {
-		Error("Помилка створення команди програми", err)
+		Error("Error creating command settings", err)
 		return
 	}
 	giveawayCreate := discordgo.ApplicationCommand{
@@ -82,16 +82,13 @@ func registerCommands(sess *discordgo.Session) {
 		Description: "start giveaway (modal window)",
 		Type:        discordgo.ChatApplicationCommand,
 	}
-	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", &giveawayCreate) // Створення і відправка команд !
+	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", &giveawayCreate)
 	if err != nil {
-		Error("Помилка створення команди програми", err)
+		Error("Error creating command gcreate", err)
 		return
 	}
 }
 func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-
-	_, lang := SelectDB("channel_log_voiceID", ic.GuildID)
-	trs := getTranslation(lang)
 
 	if ic.Type == discordgo.InteractionApplicationCommand {
 		if !isAdmin(s, ic) {
@@ -137,7 +134,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 									CustomID:    "duration",
 									Label:       "duration",
 									Style:       discordgo.TextInputShort,
-									Placeholder: "Ex: 20 minutes",
+									Placeholder: "Ex: 20d 35h 20m",
 									Required:    true,
 								},
 							},
@@ -177,8 +174,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			return
 		case "settings":
 			embed := &discordgo.MessageEmbed{
-				Title:       trs.SettingFunction,
-				Description: fmt.Sprintf("> %s", trs.SelectItem),
+				Title:       "Setting up bot functions",
+				Description: "> Select the item you want to adjust",
 				Thumbnail: &discordgo.MessageEmbedThumbnail{
 					URL: "https://i.imgur.com/o7wcuxw.png",
 				},
@@ -200,27 +197,27 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 								discordgo.SelectMenu{
 									// Select menu, as other components, must have a customID, so we set it to this value.
 									CustomID:    "select",
-									Placeholder: trs.SelectSettingItem,
+									Placeholder: "Select the setting item 👇",
 									Options: []discordgo.SelectMenuOption{
 										{
-											Label: trs.Logging,
+											Label: "Logging in",
 											// As with components, this things must have their own unique "id" to identify which is which.
 											// In this case such id is Value field.
-											Value: "logyvanie",
+											Value: "logging",
 											Emoji: &discordgo.ComponentEmoji{
 												Name: "📝",
 											},
 											// You can also make it a default option, but in this case we won't.
 											Default:     false,
-											Description: trs.EventLogging,
+											Description: "Event logging on the server",
 										},
 										{
-											Label: trs.Lang,
-											Value: "Language_Insert",
+											Label: "Work it",
+											Value: "null",
 											Emoji: &discordgo.ComponentEmoji{
 												Name: "🗣️",
 											},
-											Description: trs.ChangeLang,
+											Description: "Work it",
 										},
 									},
 								},
@@ -231,14 +228,14 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			}
 			err := s.InteractionRespond(ic.Interaction, response)
 			if err != nil {
-				Error("", err)
+				Error("error send command settings", err)
 			}
 		}
 		return
 	} else if ic.Type == discordgo.InteractionMessageComponent {
 		switch ic.MessageComponentData().CustomID {
 		case "participate":
-			currentTime := time.Now().Format("2006-01-02T15:04:05.999Z07:00")
+			currentTime := time.Now().Format(time.RFC3339)
 
 			gvw, Participates, err := incrementParticipantCount(ic.GuildID, ic.Interaction.Member.User.ID)
 			if err != nil {
@@ -320,8 +317,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		case "select":
 			selectedValue := ic.MessageComponentData().Values[0]
 			embed := &discordgo.MessageEmbed{
-				Title:       trs.ConfigLogging,
-				Description: fmt.Sprintf(">>> %s", trs.ChannelsLog),
+				Title:       "Configuring server logging",
+				Description: ">>> Select channels to log. From `one` to `three`. You can change them at any time.",
 				Thumbnail: &discordgo.MessageEmbedThumbnail{
 					URL: "https://i.imgur.com/BKYSMoP.png",
 				},
@@ -332,25 +329,25 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				},
 				Fields: []*discordgo.MessageEmbedField{
 					{
-						Name:  trs.SelectFirstChannel,
-						Value: trs.FirstChannelDescrip,
+						Name:  "Select the first channel",
+						Value: "*The first channel shows you `change/delete` messages on the server.*",
 					},
 					{
-						Name:  trs.SelectSecondChannel,
-						Value: trs.SecondChannelDescrip,
+						Name:  "Select the second channel",
+						Value: "*The second channel gives you `enter/transition/exit` from the voice channels on the server.*",
 					},
 					{
-						Name:  trs.SelectThirdChannel,
-						Value: trs.ThirdChannelDescrip,
+						Name:  "Selecting the third channel",
+						Value: "*The third channel displays `login/logout/ban/kick/timeout` of the user on the server.*",
 					},
 					{
-						Name:  trs.SelectChannel,
-						Value: trs.ChannelDescrip,
+						Name:  "Channel selection",
+						Value: "***If you want the logging output to one channel, just select the channel you need!***",
 					},
 				},
 			}
 			switch selectedValue {
-			case "logyvanie":
+			case "logging":
 				minValues := 1
 				response := &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -365,7 +362,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 										MaxValues:    4,
 										MenuType:     discordgo.ChannelSelectMenu,
 										CustomID:     "channel_select",
-										Placeholder:  trs.Placeholder,
+										Placeholder:  "It is necessary to poke here",
 										ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
 									},
 								},
@@ -377,98 +374,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				if err != nil {
 					Error("", err)
 				}
-
-				return
-			case "Language_Insert":
-				response := &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Flags:   discordgo.MessageFlagsEphemeral,
-						Content: trs.IfChangeLang,
-						Components: []discordgo.MessageComponent{
-							discordgo.ActionsRow{
-								Components: []discordgo.MessageComponent{
-									discordgo.Button{
-										Label:    "UA",
-										Style:    discordgo.SuccessButton,
-										Disabled: false,
-										CustomID: "Language_UA",
-										Emoji: &discordgo.ComponentEmoji{
-											Name: "🇺🇦",
-										},
-									},
-									discordgo.Button{
-										Label:    "EU",
-										Style:    discordgo.SuccessButton,
-										Disabled: false,
-										CustomID: "Language_EU",
-										Emoji: &discordgo.ComponentEmoji{
-											Name: "🇪🇺",
-										},
-									},
-								},
-							},
-						},
-					},
-				}
-				err := s.InteractionRespond(ic.Interaction, response)
-				if err != nil {
-					Error("", err)
-				}
-
 				return
 			}
-		case "Language_EU":
-			query := fmt.Sprintf(`UPDATE %s SET Language = EU WHERE id = %s`, shortenNumber(ic.GuildID), ic.GuildID)
-			go UpdateDB(query)
-
-			embed := &discordgo.MessageEmbed{
-				Title:       "Language Change!",
-				Color:       0x5fc437,
-				Description: "> The language was successfully changed",
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    "Kazaki",
-					IconURL: "https://i.imgur.com/04X5nxH.png",
-				},
-			}
-			response := &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags:  discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{embed},
-				},
-			}
-			err := s.InteractionRespond(ic.Interaction, response)
-			if err != nil {
-				Error("", err)
-			}
-			return
-
-		case "Language_UA":
-			query := fmt.Sprintf(`UPDATE %s SET Language = UA WHERE id = %s`, shortenNumber(ic.GuildID), ic.GuildID)
-			go UpdateDB(query)
-
-			embed := &discordgo.MessageEmbed{
-				Title:       "Мову змінено!",
-				Color:       0x5fc437,
-				Description: "> Мову було успішно змінено!",
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    "Kazaki",
-					IconURL: "https://i.imgur.com/04X5nxH.png",
-				},
-			}
-			response := &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags:  discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{embed},
-				},
-			}
-			err := s.InteractionRespond(ic.Interaction, response)
-			if err != nil {
-				Error("", err)
-			}
-			return
 		case "channel_select":
 			ChannelsID = ic.MessageComponentData().Values
 			switch len(ChannelsID) {
@@ -476,13 +383,14 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				response := &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
 					Data: &discordgo.InteractionResponseData{
-						Flags:   discordgo.MessageFlagsEphemeral,
-						Content: trs.BigDescrip,
+						Flags: discordgo.MessageFlagsEphemeral,
+						Content: ">>> *If you want to send all logs to one channel, click the `All logs` button." +
+							"If you need specific logging for messages, voice channels, or events, select the appropriate option.*",
 						Components: []discordgo.MessageComponent{
 							discordgo.ActionsRow{
 								Components: []discordgo.MessageComponent{
 									discordgo.Button{
-										Label:    trs.AllLogs,
+										Label:    "All logs",
 										Style:    discordgo.SuccessButton,
 										Disabled: false,
 										CustomID: "fd_yes",
@@ -491,7 +399,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 										},
 									},
 									discordgo.Button{
-										Label:    trs.Message,
+										Label:    "Message",
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_message",
@@ -500,7 +408,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 										},
 									},
 									discordgo.Button{
-										Label:    trs.VoiceChannels,
+										Label:    "Voice channels",
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_voice",
@@ -509,7 +417,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 										},
 									},
 									discordgo.Button{
-										Label:    trs.Events,
+										Label:    "Events",
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_event",
@@ -530,14 +438,14 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				return
 			case 2:
 				embed := &discordgo.MessageEmbed{
-					Title:       "Незрозуміло",
-					Color:       0xffa100,
-					Description: "> Функція пока в розробці",
+					Title:       "CAT",
+					Color:       0xfadb84,
+					Description: "> I'm lazzy cat xD",
 					Image: &discordgo.MessageEmbedImage{
 						URL: "https://i.imgur.com/gYaQOEj.jpg",
 					},
 					Footer: &discordgo.MessageEmbedFooter{
-						Text:    "Kazaki",
+						Text:    "eseky",
 						IconURL: "https://i.imgur.com/04X5nxH.png",
 					},
 				}
@@ -555,9 +463,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				return
 			case 3:
 				embed := &discordgo.MessageEmbed{
-					Title:       trs.Success,
+					Title:       "Successfully",
 					Color:       0x0ea901,
-					Description: trs.UseAllLogs,
+					Description: "> You can now use server-wide logging",
 					Footer: &discordgo.MessageEmbedFooter{
 						Text:    "Kazaki",
 						IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -583,9 +491,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			}
 		case "fd_yes":
 			embed := &discordgo.MessageEmbed{
-				Title:       trs.Success,
+				Title:       "Successfully",
 				Color:       0x0ea901,
-				Description: trs.UseAllLogsFirstChannel,
+				Description: "> Now you can use logging of the whole server in only one channel",
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -611,9 +519,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		case "fd_message":
 
 			embed := &discordgo.MessageEmbed{
-				Title:       trs.Success,
+				Title:       "Successfully",
 				Color:       0x0ea901,
-				Description: trs.UseMessageLog,
+				Description: "> Now you can only use message logging",
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -638,9 +546,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		case "fd_voice":
 
 			embed := &discordgo.MessageEmbed{
-				Title:       trs.Success,
+				Title:       "Successfully",
 				Color:       0x0ea901,
-				Description: trs.UseVoiceLog,
+				Description: "> Now you can only use voice channel logging",
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    "Kazaki",
 					IconURL: "https://i.imgur.com/04X5nxH.png",
@@ -671,7 +579,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	} else if ic.Type == discordgo.InteractionModalSubmit {
 		switch ic.ModalSubmitData().CustomID {
 		case "giveaway-create":
-			currentTime := time.Now().Format("2006-01-02T15:04:05.999Z07:00")
+			currentTime := time.Now().Format(time.RFC3339)
 
 			CountParticipate := 0
 

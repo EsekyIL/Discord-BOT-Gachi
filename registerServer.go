@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS %s (
 )`, shortenNumber(g.Guild.ID))
 	_, err := database.Exec(query)
 	if err != nil {
-		fmt.Println("Error creating table:", err)
+		Error("error creating table", err)
 	}
 
 	// Формування SQL-запиту для вставки даних
@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	// Підготовка запиту для вставки даних
 	statement, err := database.Prepare(query)
 	if err != nil {
-		Error("Проблемс", err)
+		Error("error query", err)
 		return
 	}
 	defer statement.Close()
@@ -43,7 +43,8 @@ CREATE TABLE IF NOT EXISTS %s (
 	// Виконання запиту на вставку даних
 	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0, 0, "EU")
 	if err != nil {
-		Error("Error executing INSERT statement", err)
+		Error("error executing INSERT statement", err)
+		return
 	}
 	logger := slog.New(tint.NewHandler(os.Stderr, nil))
 

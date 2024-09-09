@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -11,29 +10,24 @@ import (
 )
 
 var cache = make(map[string]string)
-var cacheMutex sync.RWMutex // Mutex для синхронізації доступу до кешу
+var cacheMutex sync.RWMutex
 
 func getCreationTime(userID string) time.Time {
-	// Перетворюємо ID на ціле число
+
 	id, _ := strconv.ParseInt(userID, 10, 64)
 
-	// Вираховуємо кількість наносекунд з епохи Unix
 	timestamp := (id >> 22) + 1420070400000
 
-	// Перетворюємо на тип time.Time
 	return time.Unix(0, timestamp*int64(time.Millisecond))
 }
 
 func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate) {
-	currentTime := time.Now()
-	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
+	currentTime := time.Now().Format(time.RFC3339)
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", ic.GuildID)
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", ic.GuildID)
 	if channel_log_serverID == 0 {
 		return
 	}
-
-	trs := getTranslation(lang)
 
 	MaxUses := strconv.Itoa(ic.MaxUses)
 	if MaxUses == "0" {
@@ -45,48 +39,55 @@ func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate) {
 		expiresAt = 2147483647
 	}
 	embed := &discordgo.MessageEmbed{
-		Title: trs.InviteCreated,
+		Title: "An invitation has been created",
 		Description: fmt.Sprintf(
-			">>> **%s: **"+"`%s`"+"\n"+"**%s: **"+"<#%s>"+"\n"+"**%s: **"+"<t:%d:R>"+"\n"+"**%s: **"+"%s",
-			trs.Code, ic.Code, trs.Channel, ic.ChannelID, trs.ValidityPeriod, expiresAt, trs.CountUser, MaxUses,
+			">>> **Code: **"+"`%s`"+"\n"+"**Channel: **"+"<#%s>"+"\n"+"**Validity period: **"+"<t:%d:R>"+"\n"+"**Count of users: **"+"%s",
+			ic.Code, ic.ChannelID, expiresAt, MaxUses,
 		),
 		Footer: &discordgo.MessageEmbedFooter{
 			Text:    ic.Inviter.Username,
 			IconURL: ic.Inviter.AvatarURL("256"),
 		},
 		Color:     0x37c4b8, // Колір (у форматі HEX)
-		Timestamp: stringTime,
+		Timestamp: currentTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("invite create problem", err)
+		return
+	}
 }
 func UserJoin(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
-	currentTime := time.Now()
-	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
+	currentTime := time.Now().Format(time.RFC3339)
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", gma.GuildID)
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", gma.GuildID)
 	if channel_log_serverID == 0 {
 		return
 	}
-
-	trs := getTranslation(lang)
 	userCreatedAt := getCreationTime(gma.User.ID)
 
 	embed := &discordgo.MessageEmbed{
-		Title: trs.NewUser,
+		Title: "New user",
 		Description: fmt.Sprintf(
-			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"<t:%d:R>"+"\n",
-			trs.User, gma.User.ID, trs.ID, gma.User.ID, trs.Created, int64(userCreatedAt.Unix()),
+			">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n"+"**Created: **"+"<t:%d:R>"+"\n",
+			gma.User.ID, gma.User.ID, int64(userCreatedAt.Unix()),
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: gma.AvatarURL("256"),
 		},
 		Color:     0x5fc437, // Колір (у форматі HEX)
-		Timestamp: stringTime,
+		Timestamp: currentTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error guild member add", err)
+		return
+	}
 }
 func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
-
+	if gmr.Member.User.ID == "1160175895475138611" {
+		return
+	}
 	cacheKey := fmt.Sprintf("%s:%s", gmr.GuildID, gmr.User.ID)
 
 	cacheMutex.RLock()
@@ -99,7 +100,7 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
 
 	AuditLog, err := s.GuildAuditLog(gmr.GuildID, "", "", 20, 1)
 	if err != nil {
-		Error("AUDIT", err)
+		Error("error parsing Audit Log", err)
 		return
 	}
 
@@ -114,47 +115,39 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
 
 		if BeforeEntry == entry.ID && BeforeEntry > "" {
 			kick = false
-			println("Match found: BeforeEntry equals entry.ID, kick set to false")
-
+			// Match found: BeforeEntry equals entry.ID, kick set to false
 			break
 		} else {
 			BeforeEntry = entry.ID
-
 			cacheMutex.Lock()
 			cache[cacheKey] = BeforeEntry
 			cacheMutex.Unlock()
-
 			kick = true
-			println("No match found: BeforeEntry updated to:", BeforeEntry)
-			println("kick set to true")
-
+			// No match found: BeforeEntry updated. Kick set to true
 			break
 		}
 
 	}
-
 	UserInfo, _ := s.User(UserID)
 
-	currentTime := time.Now()
-	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
+	currentTime := time.Now().Format(time.RFC3339)
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", gmr.GuildID)
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", gmr.GuildID)
 
 	if channel_log_serverID == 0 {
 		return
 	}
-	trs := getTranslation(lang)
 	if kick {
 
 		code, err := generateCode(6)
 		if err != nil {
-			Error("Помилка генерації коду", err)
+			Error("error generation Code", err)
 		}
 		embed := &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("%s "+"`%s`", trs.Kick, code),
+			Title: "Kick " + "`" + code + "`",
 			Description: fmt.Sprintf(
-				">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"__***%s***__",
-				trs.User, gmr.User.ID, trs.ID, gmr.User.ID, trs.Reason, Reason,
+				">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n"+"**Reason: **"+"__***%s***__",
+				gmr.User.ID, gmr.User.ID, Reason,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: gmr.AvatarURL("256"),
@@ -164,31 +157,35 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
 				IconURL: UserInfo.AvatarURL("256"),
 			},
 			Color:     0xc43737, // Колір (у форматі HEX)
-			Timestamp: stringTime,
+			Timestamp: currentTime,
 		}
 		message, _ := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
-		ActionType = fmt.Sprintf("[**%s**]"+"(https://discord.com/channels/%s/%s/%s)", trs.Kick, gmr.GuildID, message.ChannelID, message.ID)
+		ActionType = fmt.Sprintf("[**KICKED**]"+"(https://discord.com/channels/%s/%s/%s)", gmr.GuildID, message.ChannelID, message.ID)
 	}
 	embed := &discordgo.MessageEmbed{
-		Title: trs.UserLeftGuild,
+		Title: "The user has left the guild",
 		Description: fmt.Sprintf(
-			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"%s",
-			trs.User, gmr.User.ID, trs.ID, gmr.User.ID, ActionType,
+			">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n"+"%s",
+			gmr.User.ID, gmr.User.ID, ActionType,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: gmr.AvatarURL("256"),
 		},
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: stringTime,
+		Timestamp: currentTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error in leave people", err)
+		return
+	}
 }
 func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 	var ActionType string
 
 	AuditLog, err := s.GuildAuditLog(ban.GuildID, "", "", 22, 1)
 	if err != nil {
-		Error("AUDIT", err)
+		Error("error parsing Audit Log x2", err)
 		return
 	}
 
@@ -198,32 +195,28 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 	for _, entry := range AuditLog.AuditLogEntries {
 		UserID = entry.UserID
 		Reason = entry.Reason
-		println("UserID:", entry.UserID)
-		println("Reason:", entry.Reason)
-
 	}
 
-	currentTime := time.Now()
-	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
+	currentTime := time.Now().Format(time.RFC3339)
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", ban.GuildID)
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", ban.GuildID)
 	if channel_log_serverID == 0 {
 		return
 	}
 
-	trs := getTranslation(lang)
 	UserInfo, _ := s.User(UserID)
 
 	code, err := generateCode(6)
 	if err != nil {
-		Error("Помилка генерації коду", err)
+		Error("error generation Code", err)
+		return
 	}
 
 	embed := &discordgo.MessageEmbed{
-		Title: fmt.Sprintf("%s "+"`%s`", trs.Ban, code),
+		Title: "Ban " + "`" + code + "`",
 		Description: fmt.Sprintf(
-			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"__***%s***__"+"\n",
-			trs.User, ban.User.ID, trs.ID, ban.User.ID, trs.Reason, Reason,
+			">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n"+"**Reason: **"+"__***%s***__"+"\n",
+			ban.User.ID, ban.User.ID, Reason,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: ban.User.AvatarURL("256"),
@@ -233,44 +226,48 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 			IconURL: UserInfo.AvatarURL("256"),
 		},
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: stringTime,
+		Timestamp: currentTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error user banned!", err)
+	}
 
 	embed = &discordgo.MessageEmbed{
-		Title: trs.UserLeftGuild,
+		Title: "The user has left the guild",
 		Description: fmt.Sprintf(
-			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"%s",
-			trs.User, ban.User.ID, trs.ID, ban.User.ID, ActionType,
+			">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n"+"%s",
+			ban.User.ID, ban.User.ID, ActionType,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: ban.User.AvatarURL("256"),
 		},
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: stringTime,
+		Timestamp: currentTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error user left guild x2", err)
+		return
+	}
 }
 func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
-
 	if mute.BeforeUpdate == nil && mute.CommunicationDisabledUntil == nil {
 		return
 	}
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", mute.GuildID)
-	trs := getTranslation(lang)
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", mute.GuildID)
 
 	if mute.BeforeUpdate != nil {
 		AuditLog, err := s.GuildAuditLog(mute.GuildID, "", "", 24, 1)
 		if err != nil {
-			log.Printf("AUDIT ERROR: %v", err)
+			Error("error parsing Audit Log x3", err)
 			return
 		}
 
 		var UserID string
 
-		currentTime := time.Now().UTC()
-		stringTime := currentTime.Format(time.RFC3339)
+		currentTime := time.Now().Format(time.RFC3339)
 
 		for _, entry := range AuditLog.AuditLogEntries {
 
@@ -281,10 +278,10 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 		UserInfo, _ := s.User(UserID)
 
 		embed := &discordgo.MessageEmbed{
-			Title: trs.UnMute,
+			Title: "Unmuted",
 			Description: fmt.Sprintf(
-				">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"\n"+"**%s: **"+"<t:%d:R>",
-				trs.User, mute.User.ID, trs.ID, mute.User.ID, trs.TimeRemove, mute.BeforeUpdate.CommunicationDisabledUntil.Unix(),
+				">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n"+"\n"+"**Time to remove the restriction: **"+"<t:%d:R>",
+				mute.User.ID, mute.User.ID, mute.BeforeUpdate.CommunicationDisabledUntil.Unix(),
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: mute.AvatarURL("256"),
@@ -294,27 +291,26 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 				IconURL: UserInfo.AvatarURL("256"),
 			},
 			Color:     0x5fc437, // Колір (у форматі HEX)
-			Timestamp: stringTime,
+			Timestamp: currentTime,
 		}
-		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		if err != nil {
+			Error("error user unmute", err)
+			return
+		}
 	}
 
 	if mute.CommunicationDisabledUntil != nil {
 		AuditLog, err := s.GuildAuditLog(mute.GuildID, "", "", 24, 1)
 		if err != nil {
-			log.Printf("AUDIT ERROR: %v", err)
+			Error("error parsing Audit Log x4", err)
 			return
 		}
 
 		var UserID string
 		var Reason string
 
-		currentTime := time.Now().UTC()
-		stringTime := currentTime.Format(time.RFC3339)
-
-		/*hours := int(duration.Hours())
-		minutes := int(duration.Minutes()) % 60
-		seconds := int(duration.Seconds()) % 60*/
+		currentTime := time.Now().Format(time.RFC3339)
 
 		for _, entry := range AuditLog.AuditLogEntries {
 
@@ -327,14 +323,15 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 
 		code, err := generateCode(6)
 		if err != nil {
-			Error("Помилка генерації коду", err)
+			Error("error generation code x3", err)
+			return
 		}
 
 		embed := &discordgo.MessageEmbed{
-			Title: fmt.Sprintf("%s "+"`%s`", trs.Mute, code),
+			Title: "Mute " + "`" + code + "`",
 			Description: fmt.Sprintf(
-				">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n"+"**%s: **"+"__***%s***__"+"\n"+"**%s: **"+"<t:%d:R>",
-				trs.User, mute.User.ID, trs.ID, mute.User.ID, trs.Reason, Reason, trs.TimeRemove, mute.CommunicationDisabledUntil.Unix(),
+				">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n"+"**Reason: **"+"__***%s***__"+"\n"+"**Time to remove the restriction: **"+"<t:%d:R>",
+				mute.User.ID, mute.User.ID, Reason, mute.CommunicationDisabledUntil.Unix(),
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: mute.AvatarURL("256"),
@@ -344,20 +341,23 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 				IconURL: UserInfo.AvatarURL("256"),
 			},
 			Color:     0xc43737, // Колір (у форматі HEX)
-			Timestamp: stringTime,
+			Timestamp: currentTime,
 		}
-		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		if err != nil {
+			Error("error mute member", err)
+			return
+		}
 	} else {
 		return
 	}
 }
 func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
-	currentTime := time.Now().UTC()
-	stringTime := currentTime.Format(time.RFC3339)
+	currentTime := time.Now().Format(time.RFC3339)
 
 	AuditLog, err := s.GuildAuditLog(unban.GuildID, "", "", 23, 1)
 	if err != nil {
-		Error("AUDIT", err)
+		Error("error parsing Audit Log x5 ", err)
 		return
 	}
 
@@ -369,15 +369,13 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 
 	UserInfo, _ := s.User(UserID)
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", unban.GuildID)
-
-	trs := getTranslation(lang)
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", unban.GuildID)
 
 	embed := &discordgo.MessageEmbed{
-		Title: trs.UnBan,
+		Title: "Unban",
 		Description: fmt.Sprintf(
-			">>> **%s: **"+"<@%s>"+"\n"+"**%s: **"+"`%s`"+"\n",
-			trs.User, unban.User.ID, trs.ID, unban.User.ID,
+			">>> **User: **"+"<@%s>"+"\n"+"**ID: **"+"`%s`"+"\n",
+			unban.User.ID, unban.User.ID,
 		),
 		Thumbnail: &discordgo.MessageEmbedThumbnail{
 			URL: unban.User.AvatarURL("256"),
@@ -387,7 +385,11 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 			IconURL: UserInfo.AvatarURL("256"),
 		},
 		Color:     0x5fc437, // Колір (у форматі HEX)
-		Timestamp: stringTime,
+		Timestamp: currentTime,
 	}
-	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error member unbanned", err)
+		return
+	}
 }

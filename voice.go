@@ -9,31 +9,32 @@ import (
 )
 
 func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-	channel_log_voiceID, lang := SelectDB("channel_log_voiceID", vs.GuildID)
+	channel_log_voiceID, _ := SelectDB("channel_log_voiceID", vs.GuildID)
 	if channel_log_voiceID == 0 {
 		return
 	}
 
-	currentTime := time.Now()
-	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
-
-	trs := getTranslation(lang)
+	currentTime := time.Now().Format(time.RFC3339)
 
 	if vs.BeforeUpdate == nil {
 		embed := &discordgo.MessageEmbed{
-			Title: trs.UserJoinVoice,
+			Title: "The user entered the room",
 			Description: fmt.Sprintf(
-				">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>",
-				trs.Channel, vs.ChannelID, trs.User, vs.Member.User.ID,
+				">>> **Channel: **"+"<#%s>"+"\n"+"**User: **"+"<@%s>",
+				vs.ChannelID, vs.Member.User.ID,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
 			},
 			Color:     0x5fc437, // Колір (у форматі HEX)
-			Timestamp: stringTime,
+			Timestamp: currentTime,
 		}
 
-		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		if err != nil {
+			Error("error join the room", err)
+			return
+		}
 		return
 	}
 	if vs.BeforeUpdate.ChannelID == vs.ChannelID {
@@ -41,36 +42,44 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 	}
 	if vs.ChannelID == "" {
 		embed := &discordgo.MessageEmbed{
-			Title: trs.UserLeftVoice,
+			Title: "The user left the room",
 
 			Description: fmt.Sprintf(
-				">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>",
-				trs.Channel, vs.BeforeUpdate.ChannelID, trs.User, vs.Member.User.ID,
+				">>> **Channel: **"+"<#%s>"+"\n"+"**User: **"+"<@%s>",
+				vs.BeforeUpdate.ChannelID, vs.Member.User.ID,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
 			},
 			Color:     0xc43737, // Колір (у форматі HEX)
-			Timestamp: stringTime,
+			Timestamp: currentTime,
 		}
-		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		if err != nil {
+			Error("error leave the room", err)
+			return
+		}
 		return
 
 	}
 	if vs.BeforeUpdate.ChannelID != vs.ChannelID {
 		embed := &discordgo.MessageEmbed{
-			Title: trs.UserMovedVoice,
+			Title: "The user moved to the second room",
 			Description: fmt.Sprintf(
-				">>> **%s: **"+"<#%s>"+"\n"+"**%s: **"+"<#%s>"+"\n"+"**%s: **"+"<@%s>",
-				trs.OldRoom, vs.BeforeUpdate.ChannelID, trs.NewRoom, vs.ChannelID, trs.User, vs.Member.User.ID,
+				">>> **Old room: **"+"<#%s>"+"\n"+"**New room: **"+"<#%s>"+"\n"+"**User: **"+"<@%s>",
+				vs.BeforeUpdate.ChannelID, vs.ChannelID, vs.Member.User.ID,
 			),
 			Thumbnail: &discordgo.MessageEmbedThumbnail{
 				URL: vs.Member.AvatarURL("256"),
 			},
 			Color:     0x37c4b8, // Колір (у форматі HEX)
-			Timestamp: stringTime,
+			Timestamp: currentTime,
 		}
-		_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		if err != nil {
+			Error("error move member room", err)
+			return
+		}
 		return
 	}
 }
