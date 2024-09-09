@@ -261,7 +261,9 @@ func Error(msg string, err error) {
 	logger.Error(msg, "Помилка", err)
 }
 
-func SelectDB(select_row string, GuildID string, database *sql.DB) (int, string) {
+func SelectDB(select_row string, GuildID string) (int, string) {
+	database, _ := ConnectDB()
+
 	query := fmt.Sprintf("SELECT id, %s, Language FROM %s WHERE id = ?", select_row, shortenNumber(GuildID))
 	rows, err := database.Query(query, GuildID)
 	if err != nil {
@@ -289,28 +291,53 @@ func SelectDB(select_row string, GuildID string, database *sql.DB) (int, string)
 
 	return channel_log, lang
 }
+func UpdateDB(query string) error {
 
-func main() {
-	// Формуємо DSN (Data Source Name)
-	dsn := goDotEnvVariable("DSN")
+	database, err := ConnectDB()
+	if err != nil {
+		return fmt.Errorf("error connecting to the database: %v", err)
+	}
+	defer database.Close()
+
+	statement, err := database.Prepare(query)
+	if err != nil {
+		return fmt.Errorf("error preparing statement: %v", err)
+	}
+	defer statement.Close()
+
+	_, err = statement.Exec()
+	if err != nil {
+		return fmt.Errorf("error executing query: %v", err)
+	}
+
+	return nil
+}
+func ConnectDB() (*sql.DB, error) {
+	// Отримуємо DSN з тайм-аутом підключення на 10 секунд
+	dsn := goDotEnvVariable("DSN") + "?timeout=10s"
 
 	// Підключаємося до бази даних
 	database, err := sql.Open("mysql", dsn)
 	if err != nil {
-		fmt.Println("Error opening database connection:", err)
-		return
+		return nil, fmt.Errorf("error opening database connection: %v", err)
 	}
 
-	defer database.Close()
-
+	// Перевіряємо, чи вдалося підключитися до бази
 	err = database.Ping()
 	if err != nil {
-		fmt.Println("Error pinging database:", err)
-		return
+		database.Close() // Закриваємо підключення, якщо Ping не пройшов
+		return nil, fmt.Errorf("unable to reach database: %v", err)
 	}
-	// Перевіряємо з'єднання
 
-	fmt.Println("Successfully connected to the database!")
+	// Встановлюємо максимальний час простою та відкритих з'єднань
+	database.SetConnMaxIdleTime(5 * time.Minute)
+	database.SetMaxOpenConns(10)
+	database.SetMaxIdleConns(5)
+
+	return database, nil
+}
+
+func main() {
 
 	token := goDotEnvVariable("API_KEY")
 	sess, _ := discordgo.New("Bot " + token)
@@ -324,6 +351,12 @@ func main() {
 	sess.State.TrackRoles = true
 
 	sess.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
+
+		database, err := ConnectDB()
+		if err != nil {
+			log.Fatal(err)
+		}
+
 		query := fmt.Sprintf("SHOW TABLES LIKE '%s'", shortenNumber(g.Guild.ID))
 		rows, err := database.Query(query)
 		if err != nil {
@@ -339,86 +372,61 @@ func main() {
 		go registerServer(g, database) // Виклик функції для реєстрації сервера, якщо дані не знайдено
 
 	})
-	/*sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageCreate) { // Модуль логування оновленого повідомлення
-		if m.Author == nil || m.Author.Bot {
-			return
-		}
-		if m.Author.ID == "733375879480082526" {
-			currentTime := time.Now()
-			stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
-
-			embed := &discordgo.MessageEmbed{
-				Title: "ВНИМАНИЕ АКЦИЯ!",
-				Fields: []*discordgo.MessageEmbedField{
-					{
-						Name: "**Ссылки**",
-						Value: "https://t.me/ShitCoinTap_Bot/Game?startapp=QAoqko6j66D2_XpsDXG9mA" + "\n" + "https://t.me/hamsTer_kombat_bot/start?startapp=kentId6271166370" + "\n" + "https://t.me/TimeTONbot?start=Esekyil" + "\n" +
-							"https://t.me/drumtap_bot?start=1716917988423593" + "\n" + "https://t.me/blum/app?startapp=ref_ir3PwjIYrt" + "\n" + "https://t.me/wcoin_tapbot?start=NjI3MTE2NjM3MA" + "\n" + "https://t.me/memefi_coin_bot?start=r_74176e6a6f" + "\n" +
-							"https://t.me/cexio_tap_bot?start=1716557174796979",
-						Inline: false,
-					},
-				},
-				Description: fmt.Sprintf(
-					"### Приветствуем! У нас стартовала уникальная акция для самых активных участников.\n" +
-						"``` Ваша задача проста – выполнить все задания, а именно: перейти по инвайт-ссылкам в Telegram." +
-						"Места ограничены (всего 10 участников). За выполнение всех условий вы получите эксклюзивную кастомную роль на нашем Discord-сервере." +
-						"Успейте занять своё место и свяжитесь со мной в личных сообщениях (Discord), чтобы обсудить награду! ```",
-				),
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    m.Author.Username,
-					IconURL: m.Author.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
-				},
-				Color:     0x37c4b8, // Колір (у форматі HEX)
-				Timestamp: stringTime,
-			}
-
-			_, _ = s.ChannelMessageSendEmbed(m.ChannelID, embed)
-		}
-	})*/
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
-		Commands(s, ic, database)
+
+		Commands(s, ic)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		if m.Author == nil || m.Author.Bot {
 			return
 		}
-		go MsgUpdate(s, m, database)
+		go MsgUpdate(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) {
-		go MsgDelete(s, m, database)
+
+		go MsgDelete(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-		go VoiceLog(s, vs, database)
+
+		go VoiceLog(s, vs)
 	})
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InviteCreate) {
-		go InvCreate(s, ic, database)
+
+		go InvCreate(s, ic)
 	})
 	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
-		go UserJoin(s, gma, database)
+
+		go UserJoin(s, gma)
 	})
 	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
-		go UserExit(s, gmr, database)
+
+		go UserExit(s, gmr)
 	})
 	sess.AddHandler(func(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
-		go UserBanned(s, ban, database)
+
+		go UserBanned(s, ban)
 	})
 	sess.AddHandler(func(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 		// Отримання аудиторських записів для сервера
-		go UserMuted(s, mute, database)
+		if mute.BeforeUpdate == nil || mute.CommunicationDisabledUntil == nil {
+			return
+		}
+		go UserMuted(s, mute)
 	})
 	sess.AddHandler(func(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
-		go UserUnBanned(s, unban, database)
+		go UserUnBanned(s, unban)
 	})
 
 	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers // Доп. дозволи
 
-	err = sess.Open()
+	err := sess.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer sess.Close()
 
-	fmt.Println("The bot is online!")
+	currentTime := time.Now()
+	fmt.Println(currentTime.Format(time.RFC1123), "The bot is online!")
 
 	sc := make(chan os.Signal, 1) // Вимкнення бота CTRL+C
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)

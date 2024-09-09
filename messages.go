@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
@@ -9,8 +8,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.DB) {
-	channel_log_msgID, lang := SelectDB("channel_log_msgID", m.GuildID, database)
+func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
+	channel_log_msgID, lang := SelectDB("channel_log_msgID", m.GuildID)
 	if channel_log_msgID == 0 {
 		return
 	}
@@ -49,14 +48,13 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate, database *sql.D
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_msgID), embed)
 
 }
-func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.DB) {
-	channel_log_msgID, lang := SelectDB("channel_log_msgID", m.GuildID, database)
-	if channel_log_msgID == 0 && m.Author.Bot {
+func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete) {
+	channel_log_msgID, lang := SelectDB("channel_log_msgID", m.GuildID)
+	if channel_log_msgID == 0 || m.BeforeDelete == nil {
 		return
 	}
 
-	currentTime := time.Now()
-	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
+	currentTime := time.Now().Format("2006-01-02T15:04:05.999Z07:00")
 
 	trs := getTranslation(lang)
 
@@ -74,7 +72,7 @@ func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete, database *sql.D
 			trs.Channel, m.ChannelID, trs.Author, m.BeforeDelete.Author.ID, trs.MessageID, m.Message.ID,
 		),
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: stringTime,
+		Timestamp: currentTime,
 	}
 	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_msgID), embed)
 	if err != nil {

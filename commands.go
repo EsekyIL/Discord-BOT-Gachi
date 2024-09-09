@@ -1,14 +1,70 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
+	"regexp"
+	"strconv"
+	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 var ChannelsID []string
 
+func ParseFlexibleDuration(input string) (int64, error) {
+	// Регулярний вираз для парсингу часу у форматі 20m, 5h, 30s, 4d 20h 25m 10s і подібних
+	re := regexp.MustCompile(`(\d+)([smhd])`)
+	matches := re.FindAllStringSubmatch(input, -1)
+
+	if len(matches) == 0 {
+		return 0, fmt.Errorf("invalid duration format")
+	}
+
+	var totalDuration time.Duration
+
+	// Проходимо по всіх знайдених частинах тривалості (наприклад, 4d, 20h, 25m, 10s)
+	for _, match := range matches {
+		// Парсимо число
+		amount, err := strconv.Atoi(match[1])
+		if err != nil {
+			return 0, fmt.Errorf("invalid number in duration: %v", err)
+		}
+
+		// Визначаємо одиницю виміру часу (s = seconds, m = minutes, h = hours, d = days)
+		unit := match[2]
+		switch unit {
+		case "s":
+			totalDuration += time.Duration(amount) * time.Second
+		case "m":
+			totalDuration += time.Duration(amount) * time.Minute
+		case "h":
+			totalDuration += time.Duration(amount) * time.Hour
+		case "d":
+			totalDuration += time.Duration(amount) * time.Hour * 24 // Додаємо дні
+		default:
+			return 0, fmt.Errorf("unknown time unit: %s", unit)
+		}
+	}
+
+	// Додаємо загальну тривалість до поточного часу і отримуємо UNIX timestamp
+	unixTime := time.Now().Add(totalDuration).Unix()
+	return unixTime, nil
+}
+func isAdmin(s *discordgo.Session, ic *discordgo.InteractionCreate) bool {
+	member := ic.Interaction.Member.Roles
+
+	for _, roleID := range member {
+		role, err := s.State.Role(ic.Interaction.GuildID, roleID)
+		if err != nil {
+			Error("Error fetching role:", err)
+			continue
+		}
+		if role.Permissions&discordgo.PermissionAdministrator != 0 {
+			return true
+		}
+	}
+	return false
+}
 func registerCommands(sess *discordgo.Session) {
 
 	selectMenu := discordgo.ApplicationCommand{
@@ -21,13 +77,104 @@ func registerCommands(sess *discordgo.Session) {
 		Error("Помилка створення команди програми", err)
 		return
 	}
+	giveawayCreate := discordgo.ApplicationCommand{
+		Name:        "gcreate",
+		Description: "start giveaway (modal window)",
+		Type:        discordgo.ChatApplicationCommand,
+	}
+	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", &giveawayCreate) // Створення і відправка команд !
+	if err != nil {
+		Error("Помилка створення команди програми", err)
+		return
+	}
 }
-func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *sql.DB) {
-	_, lang := SelectDB("channel_log_voiceID", ic.GuildID, database)
+func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
+
+	_, lang := SelectDB("channel_log_voiceID", ic.GuildID)
 	trs := getTranslation(lang)
 
 	if ic.Type == discordgo.InteractionApplicationCommand {
+		if !isAdmin(s, ic) {
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Content: "You do not have permission to use this command.",
+					Flags:   discordgo.MessageFlagsEphemeral,
+				},
+			}
+			err := s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("", err)
+			}
+			return
+		}
+
 		switch ic.ApplicationCommandData().Name {
+		case "gcreate":
+
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseModal,
+				Data: &discordgo.InteractionResponseData{
+					CustomID: "giveaway-create",
+					Title:    "Create a giveaway",
+					Components: []discordgo.MessageComponent{
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:  "winners",
+									Label:     "number of winners",
+									Style:     discordgo.TextInputShort,
+									MinLength: 1,
+									MaxLength: 3,
+									Value:     "1",
+									Required:  true,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "duration",
+									Label:       "duration",
+									Style:       discordgo.TextInputShort,
+									Placeholder: "Ex: 20 minutes",
+									Required:    true,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "prize",
+									Label:       "prize",
+									Placeholder: "Enter a title...",
+									Style:       discordgo.TextInputShort,
+									Required:    true,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "description",
+									Label:       "description",
+									Style:       discordgo.TextInputParagraph,
+									Placeholder: "Enter the description of the giveaway...",
+									Required:    false,
+									MinLength:   0,
+									MaxLength:   1000,
+								},
+							},
+						},
+					},
+				},
+			}
+			err := s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Giveaway error creating", err)
+			}
+
+			return
 		case "settings":
 			embed := &discordgo.MessageEmbed{
 				Title:       trs.SettingFunction,
@@ -60,7 +207,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 											// As with components, this things must have their own unique "id" to identify which is which.
 											// In this case such id is Value field.
 											Value: "logyvanie",
-											Emoji: discordgo.ComponentEmoji{
+											Emoji: &discordgo.ComponentEmoji{
 												Name: "📝",
 											},
 											// You can also make it a default option, but in this case we won't.
@@ -70,7 +217,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										{
 											Label: trs.Lang,
 											Value: "Language_Insert",
-											Emoji: discordgo.ComponentEmoji{
+											Emoji: &discordgo.ComponentEmoji{
 												Name: "🗣️",
 											},
 											Description: trs.ChangeLang,
@@ -90,6 +237,86 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 		return
 	} else if ic.Type == discordgo.InteractionMessageComponent {
 		switch ic.MessageComponentData().CustomID {
+		case "participate":
+			currentTime := time.Now().Format("2006-01-02T15:04:05.999Z07:00")
+
+			gvw, Participates, err := incrementParticipantCount(ic.GuildID, ic.Interaction.Member.User.ID)
+			if err != nil {
+				Error("incrementParticipantCount", err)
+				return
+			}
+			if Participates {
+				response := &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags:   discordgo.MessageFlagsEphemeral,
+						Content: ">>> *You have already entered this giveaway!*",
+						Components: []discordgo.MessageComponent{
+							discordgo.ActionsRow{
+								Components: []discordgo.MessageComponent{
+									discordgo.Button{
+										Style:    discordgo.DangerButton,
+										Disabled: true,
+										CustomID: "test",
+										Emoji: &discordgo.ComponentEmoji{
+											Name: "🔚",
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				err := s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					Error("Interaction respond in participates ", err)
+				}
+				return
+			}
+			embed := &discordgo.MessageEmbed{
+				Title: gvw.Title,
+				Color: 0xfadb84,
+				Description: fmt.Sprintf(gvw.Description+"\n\n"+">>> **Ends: **"+"<t:%d:R>"+"  "+"<t:%d:f>"+"\n"+"** Hosted by: **"+"<@%s>"+"\n"+"**Entries: **"+"`%d`"+"\n"+"**Winners: **"+"`%s`",
+					gvw.TimeUnix, gvw.TimeUnix, ic.Interaction.Member.User.ID, gvw.CountParticipate, gvw.Winers,
+				),
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    ic.Interaction.Member.User.Username,
+					IconURL: ic.Interaction.Member.User.AvatarURL("256"),
+				},
+				Timestamp: currentTime,
+			}
+			components := []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.Button{
+							Style:    discordgo.PrimaryButton,
+							Disabled: false,
+							CustomID: "participate",
+							Emoji: &discordgo.ComponentEmoji{
+								Name: "🎆",
+							},
+						},
+					},
+				},
+			}
+			_, err = s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				Channel:    ic.ChannelID,
+				ID:         ic.Message.ID,
+				Embed:      embed,
+				Components: &components, // Тут передаємо слайс без вказівника
+			})
+			if err != nil {
+				Error("Channel message edit complex", err)
+				return
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond", err)
+			}
+			return
 		case "select":
 			selectedValue := ic.MessageComponentData().Values[0]
 			embed := &discordgo.MessageEmbed{
@@ -166,7 +393,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										Style:    discordgo.SuccessButton,
 										Disabled: false,
 										CustomID: "Language_UA",
-										Emoji: discordgo.ComponentEmoji{
+										Emoji: &discordgo.ComponentEmoji{
 											Name: "🇺🇦",
 										},
 									},
@@ -175,7 +402,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										Style:    discordgo.SuccessButton,
 										Disabled: false,
 										CustomID: "Language_EU",
-										Emoji: discordgo.ComponentEmoji{
+										Emoji: &discordgo.ComponentEmoji{
 											Name: "🇪🇺",
 										},
 									},
@@ -192,21 +419,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				return
 			}
 		case "Language_EU":
-			query := fmt.Sprintf(`UPDATE %s SET Language = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+			query := fmt.Sprintf(`UPDATE %s SET Language = EU WHERE id = %s`, shortenNumber(ic.GuildID), ic.GuildID)
+			go UpdateDB(query)
 
-			// Використання параметризованих запитів
-			statement, err := database.Prepare(query)
-			if err != nil {
-				fmt.Println("Error preparing statement:", err)
-				return
-			}
-			defer statement.Close()
-
-			// Виконання запиту
-			_, err = statement.Exec("EU", ic.GuildID)
-			if err != nil {
-				fmt.Println("Error executing query:", err)
-			}
 			embed := &discordgo.MessageEmbed{
 				Title:       "Language Change!",
 				Color:       0x5fc437,
@@ -223,28 +438,16 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 					Embeds: []*discordgo.MessageEmbed{embed},
 				},
 			}
-			err = s.InteractionRespond(ic.Interaction, response)
+			err := s.InteractionRespond(ic.Interaction, response)
 			if err != nil {
 				Error("", err)
 			}
 			return
 
 		case "Language_UA":
-			query := fmt.Sprintf(`UPDATE %s SET Language = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+			query := fmt.Sprintf(`UPDATE %s SET Language = UA WHERE id = %s`, shortenNumber(ic.GuildID), ic.GuildID)
+			go UpdateDB(query)
 
-			// Використання параметризованих запитів
-			statement, err := database.Prepare(query)
-			if err != nil {
-				fmt.Println("Error preparing statement:", err)
-				return
-			}
-			defer statement.Close()
-
-			// Виконання запиту
-			_, err = statement.Exec("UA", ic.GuildID)
-			if err != nil {
-				fmt.Println("Error executing query:", err)
-			}
 			embed := &discordgo.MessageEmbed{
 				Title:       "Мову змінено!",
 				Color:       0x5fc437,
@@ -261,7 +464,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 					Embeds: []*discordgo.MessageEmbed{embed},
 				},
 			}
-			err = s.InteractionRespond(ic.Interaction, response)
+			err := s.InteractionRespond(ic.Interaction, response)
 			if err != nil {
 				Error("", err)
 			}
@@ -283,7 +486,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										Style:    discordgo.SuccessButton,
 										Disabled: false,
 										CustomID: "fd_yes",
-										Emoji: discordgo.ComponentEmoji{
+										Emoji: &discordgo.ComponentEmoji{
 											Name: "✔️",
 										},
 									},
@@ -292,7 +495,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_message",
-										Emoji: discordgo.ComponentEmoji{
+										Emoji: &discordgo.ComponentEmoji{
 											Name: "💬",
 										},
 									},
@@ -301,7 +504,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_voice",
-										Emoji: discordgo.ComponentEmoji{
+										Emoji: &discordgo.ComponentEmoji{
 											Name: "🎙️",
 										},
 									},
@@ -310,7 +513,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 										Style:    discordgo.SecondaryButton,
 										Disabled: false,
 										CustomID: "fd_event",
-										Emoji: discordgo.ComponentEmoji{
+										Emoji: &discordgo.ComponentEmoji{
 											Name: "📢",
 										},
 									},
@@ -373,21 +576,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				}
 
 				// Формування запиту з параметрами
-				query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = ?, channel_log_voiceID = ?, channel_log_serverID = ? WHERE id = ?`, shortenNumber(ic.GuildID))
-
-				// Використання параметризованих запитів
-				statement, err := database.Prepare(query)
-				if err != nil {
-					fmt.Println("Error preparing statement:", err)
-					return
-				}
-				defer statement.Close()
-
-				// Виконання запиту
-				_, err = statement.Exec(ChannelsID[0], ChannelsID[1], ChannelsID[2], ic.GuildID)
-				if err != nil {
-					fmt.Println("Error executing query:", err)
-				}
+				query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = %s, channel_log_voiceID = %s, channel_log_serverID = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[1], ChannelsID[2], ic.GuildID)
+				go UpdateDB(query)
 
 				return
 			}
@@ -414,21 +604,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 			}
 
 			// Формування запиту з параметрами
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = ?, channel_log_voiceID = ?, channel_log_serverID = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = %s, channel_log_voiceID = %s, channel_log_serverID = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[0], ChannelsID[0], ic.GuildID)
+			go UpdateDB(query)
 
-			// Використання параметризованих запитів
-			statement, err := database.Prepare(query)
-			if err != nil {
-				fmt.Println("Error preparing statement:", err)
-				return
-			}
-			defer statement.Close()
-
-			// Виконання запиту
-			_, err = statement.Exec(ChannelsID[0], ChannelsID[0], ChannelsID[0], ic.GuildID)
-			if err != nil {
-				fmt.Println("Error executing query:", err)
-			}
 			return
 		case "fd_message":
 
@@ -453,21 +631,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				Error("", err)
 			}
 
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = ?, channel_log_voiceID = ?, channel_log_serverID = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = %s, channel_log_voiceID = 0, channel_log_serverID = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
+			go UpdateDB(query)
 
-			// Використання параметризованих запитів
-			statement, err := database.Prepare(query)
-			if err != nil {
-				fmt.Println("Error preparing statement:", err)
-				return
-			}
-			defer statement.Close()
-
-			// Виконання запиту
-			_, err = statement.Exec(ChannelsID[0], "0", "0", ic.GuildID)
-			if err != nil {
-				fmt.Println("Error executing query:", err)
-			}
 			return
 		case "fd_voice":
 
@@ -492,39 +658,76 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate, database *s
 				Error("", err)
 			}
 
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = ?, channel_log_voiceID = ?, channel_log_serverID = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = 0, channel_log_voiceID = %s, channel_log_serverID = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
+			go UpdateDB(query)
 
-			// Використання параметризованих запитів
-			statement, err := database.Prepare(query)
-			if err != nil {
-				fmt.Println("Error preparing statement:", err)
-				return
-			}
-			defer statement.Close()
-
-			// Виконання запиту
-			_, err = statement.Exec("0", ChannelsID[0], "0", ic.GuildID)
-			if err != nil {
-				fmt.Println("Error executing query:", err)
-			}
 			return
 		case "fd_event":
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = ?, channel_log_voiceID = ?, channel_log_serverID = ? WHERE id = ?`, shortenNumber(ic.GuildID))
+			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = 0, channel_log_voiceID = 0, channel_log_serverID = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
+			go UpdateDB(query)
 
-			// Використання параметризованих запитів
-			statement, err := database.Prepare(query)
-			if err != nil {
-				fmt.Println("Error preparing statement:", err)
-				return
-			}
-			defer statement.Close()
-
-			// Виконання запиту
-			_, err = statement.Exec("0", "0", ChannelsID[0], ic.GuildID)
-			if err != nil {
-				fmt.Println("Error executing query:", err)
-			}
 			return
 		}
+	} else if ic.Type == discordgo.InteractionModalSubmit {
+		switch ic.ModalSubmitData().CustomID {
+		case "giveaway-create":
+			currentTime := time.Now().Format("2006-01-02T15:04:05.999Z07:00")
+
+			CountParticipate := 0
+
+			var description string
+			description = ""
+
+			winners := ic.ModalSubmitData().Components[0].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			duration := ic.ModalSubmitData().Components[1].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			prize := ic.ModalSubmitData().Components[2].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			description = ic.ModalSubmitData().Components[3].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+
+			unixTime, err := ParseFlexibleDuration(duration)
+			if err != nil {
+				fmt.Println("Error:", err)
+				return
+			}
+
+			embed := &discordgo.MessageEmbed{
+				Title: prize,
+				Color: 0xfadb84,
+				Description: fmt.Sprintf(description+"\n\n"+">>> **Ends: **"+"<t:%d:R>"+"  "+"<t:%d:f>"+"\n"+"** Hosted by: **"+"<@%s>"+"\n"+"**Entries: **"+"`%d`"+"\n"+"**Winners: **"+"`%s`",
+					unixTime, unixTime, ic.Interaction.Member.User.ID, CountParticipate, winners,
+				),
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    ic.Interaction.Member.User.Username,
+					IconURL: ic.Interaction.Member.User.AvatarURL("256"),
+				},
+				Timestamp: currentTime,
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Embeds: []*discordgo.MessageEmbed{embed},
+					Components: []discordgo.MessageComponent{
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.Button{
+									Style:    discordgo.PrimaryButton,
+									Disabled: false,
+									CustomID: "participate",
+									Emoji: &discordgo.ComponentEmoji{
+										Name: "🎆",
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("", err)
+			}
+			go GiveawayCreated(ic.GuildID, prize, description, unixTime, CountParticipate, int(time.Now().Unix()), winners)
+
+		}
+		return
 	}
 }

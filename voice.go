@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
@@ -9,8 +8,8 @@ import (
 	"github.com/bwmarrin/discordgo"
 )
 
-func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate, database *sql.DB) {
-	channel_log_voiceID, lang := SelectDB("channel_log_voiceID", vs.GuildID, database)
+func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
+	channel_log_voiceID, lang := SelectDB("channel_log_voiceID", vs.GuildID)
 	if channel_log_voiceID == 0 {
 		return
 	}

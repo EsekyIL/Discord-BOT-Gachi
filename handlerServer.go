@@ -1,7 +1,6 @@
 package main
 
 import (
-	"database/sql"
 	"fmt"
 	"log"
 	"strconv"
@@ -25,11 +24,11 @@ func getCreationTime(userID string) time.Time {
 	return time.Unix(0, timestamp*int64(time.Millisecond))
 }
 
-func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate, database *sql.DB) {
+func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate) {
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", ic.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", ic.GuildID)
 	if channel_log_serverID == 0 {
 		return
 	}
@@ -60,11 +59,11 @@ func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate, database *sql.D
 	}
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 }
-func UserJoin(s *discordgo.Session, gma *discordgo.GuildMemberAdd, database *sql.DB) {
+func UserJoin(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", gma.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", gma.GuildID)
 	if channel_log_serverID == 0 {
 		return
 	}
@@ -86,7 +85,7 @@ func UserJoin(s *discordgo.Session, gma *discordgo.GuildMemberAdd, database *sql
 	}
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 }
-func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *sql.DB) {
+func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
 
 	cacheKey := fmt.Sprintf("%s:%s", gmr.GuildID, gmr.User.ID)
 
@@ -139,7 +138,7 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", gmr.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", gmr.GuildID)
 
 	if channel_log_serverID == 0 {
 		return
@@ -184,7 +183,7 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove, database *
 	}
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 }
-func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.DB) {
+func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 	var ActionType string
 
 	AuditLog, err := s.GuildAuditLog(ban.GuildID, "", "", 22, 1)
@@ -207,7 +206,7 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 	currentTime := time.Now()
 	stringTime := currentTime.Format("2006-01-02T15:04:05.999Z07:00")
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", ban.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", ban.GuildID)
 	if channel_log_serverID == 0 {
 		return
 	}
@@ -252,8 +251,13 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd, database *sql.
 	}
 	_, _ = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
 }
-func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database *sql.DB) {
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", mute.GuildID, database)
+func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
+
+	if mute.BeforeUpdate == nil && mute.CommunicationDisabledUntil == nil {
+		return
+	}
+
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", mute.GuildID)
 	trs := getTranslation(lang)
 
 	if mute.BeforeUpdate != nil {
@@ -267,10 +271,6 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database
 
 		currentTime := time.Now().UTC()
 		stringTime := currentTime.Format(time.RFC3339)
-
-		/*hours := int(duration.Hours())
-		minutes := int(duration.Minutes()) % 60
-		seconds := int(duration.Seconds()) % 60*/
 
 		for _, entry := range AuditLog.AuditLogEntries {
 
@@ -351,7 +351,7 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate, database
 		return
 	}
 }
-func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove, database *sql.DB) {
+func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 	currentTime := time.Now().UTC()
 	stringTime := currentTime.Format(time.RFC3339)
 
@@ -369,7 +369,7 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove, databas
 
 	UserInfo, _ := s.User(UserID)
 
-	channel_log_serverID, lang := SelectDB("channel_log_serverID", unban.GuildID, database)
+	channel_log_serverID, lang := SelectDB("channel_log_serverID", unban.GuildID)
 
 	trs := getTranslation(lang)
 
