@@ -234,10 +234,29 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		return
 	} else if ic.Type == discordgo.InteractionMessageComponent {
 		switch ic.MessageComponentData().CustomID {
+		case "leave_giveaway":
+			_, err := leaveUserGiveaway(ic.GuildID, ic.Interaction.Member.User.ID)
+			if err != nil {
+				Error("incrementParticipantCount", err)
+				return
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags:   discordgo.MessageFlagsEphemeral,
+					Content: ">>> *You have successfully left the giveaway! 😔*",
+				},
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond in participates ", err)
+			}
+			return
+
 		case "participate":
 			currentTime := time.Now().Format(time.RFC3339)
 
-			gvw, Participates, err := incrementParticipantCount(ic.GuildID, ic.Interaction.Member.User.ID)
+			gvw, Participates, err := incrementParticipantCount(ic.GuildID, ic.Interaction.Member.User.ID, ic.Message.ID)
 			if err != nil {
 				Error("incrementParticipantCount", err)
 				return
@@ -253,8 +272,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 								Components: []discordgo.MessageComponent{
 									discordgo.Button{
 										Style:    discordgo.DangerButton,
-										Disabled: true,
-										CustomID: "test",
+										Disabled: false,
+										CustomID: "leave_giveaway",
 										Emoji: &discordgo.ComponentEmoji{
 											Name: "🔚",
 										},
@@ -276,10 +295,6 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				Description: fmt.Sprintf(gvw.Description+"\n\n"+">>> **Ends: **"+"<t:%d:R>"+"  "+"<t:%d:f>"+"\n"+"** Hosted by: **"+"<@%s>"+"\n"+"**Entries: **"+"`%d`"+"\n"+"**Winners: **"+"`%s`",
 					gvw.TimeUnix, gvw.TimeUnix, ic.Interaction.Member.User.ID, gvw.CountParticipate, gvw.Winers,
 				),
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    ic.Interaction.Member.User.Username,
-					IconURL: ic.Interaction.Member.User.AvatarURL("256"),
-				},
 				Timestamp: currentTime,
 			}
 			components := []discordgo.MessageComponent{
@@ -633,7 +648,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			if err != nil {
 				Error("", err)
 			}
-			go GiveawayCreated(ic.GuildID, prize, description, unixTime, CountParticipate, int(time.Now().Unix()), winners)
+
+			go GiveawayCreated(ic.GuildID, prize, description, unixTime, CountParticipate, int(time.Now().Unix()), winners, ic.ChannelID, ic.Interaction.Member.User.ID)
 
 		}
 		return

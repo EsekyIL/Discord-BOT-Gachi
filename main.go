@@ -231,6 +231,16 @@ func main() {
 		go UserUnBanned(s, unban)
 	})
 
+	go func() {
+		// Запускаємо перевірку
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			checkGiveaways(sess)
+		}
+	}()
+
 	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers // Доп. дозволи
 
 	err := sess.Open()
