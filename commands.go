@@ -140,6 +140,14 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 
 		switch ic.ApplicationCommandData().Name {
 		case "ticket":
+			rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(ic.GuildID), ic.GuildID))
+			if err != nil {
+				Error("error parsing data in DB", err)
+			}
+			if !rows.Forum {
+				return
+			}
+
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
 				Data: &discordgo.InteractionResponseData{
@@ -149,27 +157,26 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
 								discordgo.TextInput{
-									CustomID:    "forumID",
-									Label:       "forum id",
-									Placeholder: "TODO: variable Forum.ID parsing",
-									Style:       discordgo.TextInputShort,
-									Value:       "1",
-									Required:    true,
-									MinLength:   1,
-									MaxLength:   23,
+									CustomID:  "forumID",
+									Label:     "forum id",
+									Style:     discordgo.TextInputShort,
+									Value:     rows.Channel_ID_Forum,
+									Required:  true,
+									MinLength: 1,
+									MaxLength: 23,
 								},
 							},
 						},
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
 								discordgo.TextInput{
-									CustomID:    "author",
-									Label:       "author id",
-									Placeholder: "TODO: variable Author.ID parsing",
-									Style:       discordgo.TextInputShort,
-									Required:    true,
-									MinLength:   3,
-									MaxLength:   23,
+									CustomID:  "author",
+									Label:     "author id",
+									Value:     ic.Member.User.ID,
+									Style:     discordgo.TextInputShort,
+									Required:  true,
+									MinLength: 3,
+									MaxLength: 23,
 								},
 							},
 						},
@@ -214,7 +221,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 					},
 				},
 			}
-			err := s.InteractionRespond(ic.Interaction, response)
+			err = s.InteractionRespond(ic.Interaction, response)
 			if err != nil {
 				Error("Giveaway error creating", err)
 			}
@@ -417,6 +424,9 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			if err != nil {
 				Error("error create tags!", err)
 			}
+
+			query := fmt.Sprintf(`UPDATE %s SET channel_id_forum = %s, forum = 1 WHERE id = %s`, shortenNumber(ic.GuildID), forum.ID, ic.GuildID)
+			go UpdateDB(query)
 			return
 		case "leave-giveaway":
 			_, err := leaveUserGiveaway(ic.GuildID, ic.Interaction.Member.User.ID)
