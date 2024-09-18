@@ -296,7 +296,17 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				},
 			})
 			if err != nil {
-				Error("create forum channel", err)
+				response := &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags:   discordgo.MessageFlagsEphemeral,
+						Content: "**Error 😔**" + "\nTo create a forum, you need to make the server a community!",
+					},
+				}
+				err = s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					Error("Interaction respond create forum-channel", err)
+				}
 				return
 			}
 			response := &discordgo.InteractionResponse{
