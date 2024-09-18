@@ -230,6 +230,15 @@ func main() {
 	sess.AddHandler(func(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 		go UserUnBanned(s, unban)
 	})
+	sess.AddHandler(func(s *discordgo.Session, rc *discordgo.GuildRoleCreate) {
+		go RoleCreated(s, rc)
+	})
+	sess.AddHandler(func(s *discordgo.Session, rd *discordgo.GuildRoleDelete) {
+		go RoleDeleted(s, rd)
+	})
+	sess.AddHandler(func(s *discordgo.Session, ru *discordgo.GuildRoleUpdate) {
+		go RoleUpdated(s, ru)
+	})
 
 	go func() {
 		// Запускаємо перевірку

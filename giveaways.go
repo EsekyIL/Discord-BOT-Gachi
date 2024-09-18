@@ -213,6 +213,9 @@ func GiveawayCreated(GuildID string, prize string, description string, TimeUnix 
 }
 
 func randomInts(min, max, count int) []int {
+	if min >= max {
+		return nil
+	}
 	results := make([]int, count)
 	for i := 0; i < count; i++ {
 		results[i] = rand.Intn(max-min+1) + min
@@ -229,13 +232,20 @@ func GiveawayEnd(giveaway *Giveaway, s *discordgo.Session) {
 	}
 
 	winners := randomInts(min, max, count)
+	if winners == nil {
+		return
+	}
 
 	var rsp strings.Builder
 
 	for i, winner := range winners {
+		if winner > len(giveaway.UserParticipate) {
+			break
+		}
 		if i == count-1 {
 			temp := "<@" + giveaway.UserParticipate[winner] + ">. "
 			rsp.WriteString(temp)
+			break
 		} else {
 			temp := "<@" + giveaway.UserParticipate[winner] + ">, "
 			rsp.WriteString(temp)
@@ -298,7 +308,11 @@ func checkGiveaways(s *discordgo.Session) {
 	currentTime := time.Now().Unix()
 	endingGiveaways, err := getGiveawaysEndingSoon(currentTime)
 	if err != nil {
-		fmt.Println("Error fetching giveaways:", err)
+		Error("Error fetching giveaways", err)
+		return
+	}
+	// Якщо немає розіграшів, повертаємося
+	if len(endingGiveaways) == 0 {
 		return
 	}
 
@@ -306,7 +320,7 @@ func checkGiveaways(s *discordgo.Session) {
 		// Отримуємо деталі розіграшу
 		giveaway, err := getGiveaway(guildID)
 		if err != nil {
-			fmt.Println("Error getting giveaway:", err)
+			Error("Error getting giveaway", err)
 			continue
 		}
 
@@ -316,7 +330,7 @@ func checkGiveaways(s *discordgo.Session) {
 		// Видаляємо розіграш з відсортованої множини
 		err = removeFinishedGiveaway(guildID)
 		if err != nil {
-			fmt.Println("Error removing finished giveaway:", err)
+			Error("Error removing finished giveaway", err)
 		}
 	}
 }

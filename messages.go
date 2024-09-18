@@ -9,6 +9,9 @@ import (
 )
 
 func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
+	if m.BeforeUpdate == nil {
+		return
+	}
 	channel_log_msgID, _ := SelectDB("channel_log_msgID", m.GuildID)
 	if channel_log_msgID == 0 {
 		return
@@ -20,7 +23,7 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		Title: "Message updated",
 		Fields: []*discordgo.MessageEmbedField{
 			{
-				Name:   "*Was**",
+				Name:   "**Was**",
 				Value:  m.BeforeUpdate.Content,
 				Inline: true,
 			},
@@ -38,7 +41,7 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 			Text:    m.Author.Username,
 			IconURL: m.Author.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
 		},
-		Color:     0x37c4b8, // Колір (у форматі HEX)
+		Color:     0xc4b137, // Колір (у форматі HEX)
 		Timestamp: currentTime,
 	}
 

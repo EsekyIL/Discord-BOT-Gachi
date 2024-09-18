@@ -393,3 +393,118 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 		return
 	}
 }
+func RoleCreated(s *discordgo.Session, rc *discordgo.GuildRoleCreate) {
+	var roleName string
+	var user *discordgo.User
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", rc.GuildID)
+
+	AuditLog, err := s.GuildAuditLog(rc.GuildID, "", "", 30, 1)
+	if err != nil {
+		Error("error parsing Audit Log x6 ", err)
+		return
+	}
+	for _, entry := range AuditLog.AuditLogEntries {
+		user, _ = s.User(entry.UserID)
+	}
+
+	if rc.Role.Name == "нова роль" || rc.Role.Name == "new role" {
+		roleName = ""
+	} else {
+		roleName = rc.Role.Name
+	}
+
+	embed := &discordgo.MessageEmbed{
+		Title: "Role create",
+		Description: fmt.Sprintf(
+			"Role %s successfully created",
+			roleName,
+		),
+		Footer: &discordgo.MessageEmbedFooter{
+			Text:    user.Username,
+			IconURL: user.AvatarURL("256"),
+		},
+		Color:     0x5fc437, // Колір (у форматі HEX)
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error role created", err)
+		return
+	}
+}
+func RoleDeleted(s *discordgo.Session, rd *discordgo.GuildRoleDelete) {
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", rd.GuildID)
+	var user *discordgo.User
+	AuditLog, err := s.GuildAuditLog(rd.GuildID, "", "", 32, 1)
+	if err != nil {
+		Error("error parsing Audit Log x7 ", err)
+		return
+	}
+	for _, entry := range AuditLog.AuditLogEntries {
+		user, _ = s.User(entry.UserID)
+	}
+	role, err := s.State.Role(rd.GuildID, rd.RoleID)
+	if err != nil {
+		Error("error parsing info about role", err)
+		embed := &discordgo.MessageEmbed{
+			Title:       "Role delete",
+			Description: "Role successfully deleted",
+			Color:       0xc43737, // Колір (у форматі HEX)
+			Timestamp:   time.Now().Format(time.RFC3339),
+			Footer: &discordgo.MessageEmbedFooter{
+				Text:    user.Username,
+				IconURL: user.AvatarURL("256"),
+			},
+		}
+		_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		if err != nil {
+			Error("error role deleted", err)
+			return
+		}
+		return
+	}
+	embed := &discordgo.MessageEmbed{
+		Title: "Role delete",
+		Description: fmt.Sprintf(
+			"Role %s successfully deleted",
+			role.Name,
+		),
+		Color:     0xc43737, // Колір (у форматі HEX)
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error role deleted", err)
+		return
+	}
+}
+func RoleUpdated(s *discordgo.Session, ru *discordgo.GuildRoleUpdate) {
+	var roleID string
+	AuditLog, err := s.GuildAuditLog(ru.GuildID, "", "", 31, 1)
+	time.Sleep(4 * time.Second)
+	if err != nil {
+		Error("error parsing Audit Log x8 ", err)
+		return
+	}
+	for _, entry := range AuditLog.AuditLogEntries {
+		roleID = entry.TargetID
+	}
+	if ru.Role.ID != roleID {
+		return
+	}
+	channel_log_serverID, _ := SelectDB("channel_log_serverID", ru.GuildID)
+	embed := &discordgo.MessageEmbed{
+		Title: "Role updated",
+		Description: fmt.Sprintf(
+			"Role `%s`, <@&%s> successfully updated",
+			ru.Role.Name, ru.Role.ID,
+		),
+		Color:     0xc4b137, // Колір (у форматі HEX)
+		Timestamp: time.Now().Format(time.RFC3339),
+	}
+	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	if err != nil {
+		Error("error role updated", err)
+		return
+	}
+}

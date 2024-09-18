@@ -87,6 +87,38 @@ func registerCommands(sess *discordgo.Session) {
 		Error("Error creating command gcreate", err)
 		return
 	}
+
+	ticketCreate := discordgo.ApplicationCommand{
+		Name:        "ticket",
+		Description: "create ticket in forum",
+		Type:        discordgo.ChatApplicationCommand,
+	}
+	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", &ticketCreate)
+	if err != nil {
+		Error("Error creating command ticket", err)
+		return
+	}
+	/*err = sess.ApplicationCommandDelete("1160175895475138611", "", "1177394341371707423") ITS FIND AND DELETE COMMANDS, do not erase!!!!!!!!!!
+	if err != nil {
+		Error("Error delete command", err)
+		return
+	}
+	err = sess.ApplicationCommandDelete("1160175895475138611", "", "1177398356906082368")
+	if err != nil {
+		Error("Error delete command", err)
+		return
+	}
+	comands, err := sess.ApplicationCommands("1160175895475138611", "")
+	if err != nil {
+		Error("Error parsing commands", err)
+		return
+	}
+	for _, comand := range comands {
+		println(comand.Name)
+		println(comand.ID)
+		println("=======================")
+
+	}*/
 }
 func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 
@@ -107,8 +139,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		}
 
 		switch ic.ApplicationCommandData().Name {
+		case "ticket":
 		case "gcreate":
-
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
 				Data: &discordgo.InteractionResponseData{
@@ -172,6 +204,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			}
 
 			return
+
 		case "settings":
 			embed := &discordgo.MessageEmbed{
 				Title:       "Setting up bot functions",
@@ -212,12 +245,12 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 											Description: "Event logging on the server",
 										},
 										{
-											Label: "Work it",
-											Value: "null",
+											Label: "Ticket system",
+											Value: "ticket-sys",
 											Emoji: &discordgo.ComponentEmoji{
-												Name: "🗣️",
+												Name: "🎟️",
 											},
-											Description: "Work it",
+											Description: "Create ticket system on the server",
 										},
 									},
 								},
@@ -234,10 +267,54 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		return
 	} else if ic.Type == discordgo.InteractionMessageComponent {
 		switch ic.MessageComponentData().CustomID {
-		case "leave_giveaway":
+		case "start-ticket":
+			var everyoneID string
+			roles, err := s.GuildRoles(ic.GuildID)
+			if err != nil {
+				Error("parsing roles", err)
+				return
+			}
+			for _, role := range roles {
+				if role.Name == "@everyone" {
+					everyoneID = role.ID
+					break
+				}
+			}
+			_, err = s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+				Name:     "tickets",
+				Type:     discordgo.ChannelTypeGuildForum,
+				Topic:    "The bot automatically creates posts, no intervention is required.",
+				Position: 1,
+				NSFW:     false,
+				PermissionOverwrites: []*discordgo.PermissionOverwrite{
+					{
+						ID:    everyoneID,
+						Type:  discordgo.PermissionOverwriteTypeRole,
+						Allow: discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionReadMessageHistory,
+						Deny:  discordgo.PermissionAll,
+					},
+				},
+			})
+			if err != nil {
+				Error("create forum channel", err)
+				return
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags:   discordgo.MessageFlagsEphemeral,
+					Content: "*Success!!! 🙂*",
+				},
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond create forum-channel", err)
+			}
+			return
+		case "leave-giveaway":
 			_, err := leaveUserGiveaway(ic.GuildID, ic.Interaction.Member.User.ID)
 			if err != nil {
-				Error("incrementParticipantCount", err)
+				Error("leave user in giveaway", err)
 				return
 			}
 			response := &discordgo.InteractionResponse{
@@ -273,7 +350,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 									discordgo.Button{
 										Style:    discordgo.DangerButton,
 										Disabled: false,
-										CustomID: "leave_giveaway",
+										CustomID: "leave-giveaway",
 										Emoji: &discordgo.ComponentEmoji{
 											Name: "🔚",
 										},
@@ -362,6 +439,39 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				},
 			}
 			switch selectedValue {
+			case "ticket-sys":
+				embed = &discordgo.MessageEmbed{
+					Title: "About ticket system",
+					Description: ">>> The ticket system is a feedback system with the `administration/moderation` of the guild.\n" +
+						"The bot will automatically create a forum channel. Then the `/ticket` command will be available.\n" +
+						"Configure access rights yourself!\n" + "**Recommended: disable the right to create posts for all users.**",
+				}
+				response := &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Flags:  discordgo.MessageFlagsEphemeral,
+						Embeds: []*discordgo.MessageEmbed{embed},
+						Components: []discordgo.MessageComponent{
+							discordgo.ActionsRow{
+								Components: []discordgo.MessageComponent{
+									discordgo.Button{
+										Style:    discordgo.SuccessButton,
+										Disabled: false,
+										CustomID: "start-ticket",
+										Emoji: &discordgo.ComponentEmoji{
+											Name: "🚀",
+										},
+									},
+								},
+							},
+						},
+					},
+				}
+				err := s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					Error("Interaction respond in participates ", err)
+				}
+				return
 			case "logging":
 				minValues := 1
 				response := &discordgo.InteractionResponse{
