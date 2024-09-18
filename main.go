@@ -24,6 +24,19 @@ const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 
 var usedCodes = make(map[string]bool) // Зберігаємо всі згенеровані коди
 
+type RowData struct {
+	ID                 string
+	Name               string
+	Members            string
+	Owner              string
+	Vip                bool
+	Forum              bool
+	Channel_ID_Forum   string
+	Channel_ID_Message string
+	Channel_ID_Voice   string
+	Channel_ID_Server  string
+}
+
 func generateCode(length int) (string, error) {
 	for {
 		code := make([]byte, length)
@@ -75,35 +88,44 @@ func Error(msg string, err error) {
 	logger.Error(msg, "Помилка", err)
 }
 
-func SelectDB(select_row string, GuildID string) (int, string) {
-	database, _ := ConnectDB()
-
-	query := fmt.Sprintf("SELECT id, %s, Language FROM %s WHERE id = ?", select_row, shortenNumber(GuildID))
-	rows, err := database.Query(query, GuildID)
+func SelectDB(query string) (*RowData, error) {
+	var result RowData
+	database, err := ConnectDB()
 	if err != nil {
-		Error("Щось сталось", err)
-		return 0, "" // Повертаємо 0 у разі помилки
+		return &result, err
+	}
+
+	defer database.Close()
+
+	rows, err := database.Query(query)
+	if err != nil {
+		return &result, err
 	}
 	defer rows.Close()
 
-	var id int
-	var channel_log int
-	var lang string
-
-	if rows.Next() {
-		err := rows.Scan(&id, &channel_log, &lang)
+	for rows.Next() {
+		err := rows.Scan(
+			&result.ID,
+			&result.Name,
+			&result.Members,
+			&result.Owner,
+			&result.Vip,
+			&result.Forum,
+			&result.Channel_ID_Forum,
+			&result.Channel_ID_Message,
+			&result.Channel_ID_Voice,
+			&result.Channel_ID_Server,
+		)
 		if err != nil {
-			Error("Failed to scan the row", err)
-			return 0, ""
+			return &result, err
 		}
-	} else {
-		if err := rows.Err(); err != nil {
-			Error("Failed during iteration over rows", err)
-		}
-		return 0, ""
 	}
 
-	return channel_log, lang
+	if err = rows.Err(); err != nil {
+		return &result, err
+	}
+
+	return &result, nil
 }
 func UpdateDB(query string) error {
 
@@ -183,7 +205,7 @@ func main() {
 		if rows.Next() {
 			return
 		}
-		go registerServer(g, database) // Виклик функції для реєстрації сервера, якщо дані не знайдено
+		go registerServer(s, g, database) // Виклик функції для реєстрації сервера, якщо дані не знайдено
 
 	})
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {
@@ -197,31 +219,24 @@ func main() {
 		go MsgUpdate(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, m *discordgo.MessageDelete) {
-
 		go MsgDelete(s, m)
 	})
 	sess.AddHandler(func(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-
 		go VoiceLog(s, vs)
 	})
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InviteCreate) {
-
 		go InvCreate(s, ic)
 	})
 	sess.AddHandler(func(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
-
 		go UserJoin(s, gma)
 	})
 	sess.AddHandler(func(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
-
 		go UserExit(s, gmr)
 	})
 	sess.AddHandler(func(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
-
 		go UserBanned(s, ban)
 	})
 	sess.AddHandler(func(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
-		// Отримання аудиторських записів для сервера
 		if mute.BeforeUpdate == nil || mute.CommunicationDisabledUntil == nil {
 			return
 		}

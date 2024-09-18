@@ -140,6 +140,85 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 
 		switch ic.ApplicationCommandData().Name {
 		case "ticket":
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseModal,
+				Data: &discordgo.InteractionResponseData{
+					CustomID: "ticket-create",
+					Title:    "Create a ticket",
+					Components: []discordgo.MessageComponent{
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "forumID",
+									Label:       "forum id",
+									Placeholder: "TODO: variable Forum.ID parsing",
+									Style:       discordgo.TextInputShort,
+									Value:       "1",
+									Required:    true,
+									MinLength:   1,
+									MaxLength:   23,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "author",
+									Label:       "author id",
+									Placeholder: "TODO: variable Author.ID parsing",
+									Style:       discordgo.TextInputShort,
+									Required:    true,
+									MinLength:   3,
+									MaxLength:   23,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:  "title",
+									Label:     "Title",
+									Style:     discordgo.TextInputShort,
+									Required:  true,
+									MinLength: 3,
+									MaxLength: 50,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "tag",
+									Label:       "Tag",
+									Placeholder: "0 - not use, 1 - first, 2 - second, 3 - all",
+									Style:       discordgo.TextInputShort,
+									Required:    true,
+									MinLength:   1,
+									MaxLength:   1,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "description",
+									Label:       "description",
+									Style:       discordgo.TextInputParagraph,
+									Placeholder: "Enter the description of the ticket...",
+									Required:    true,
+									MinLength:   0,
+									MaxLength:   1000,
+								},
+							},
+						},
+					},
+				},
+			}
+			err := s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Giveaway error creating", err)
+			}
+			return
 		case "gcreate":
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
@@ -280,7 +359,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 					break
 				}
 			}
-			_, err = s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+			forum, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
 				Name:     "tickets",
 				Type:     discordgo.ChannelTypeGuildForum,
 				Topic:    "The bot automatically creates posts, no intervention is required.",
@@ -290,11 +369,12 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 					{
 						ID:    everyoneID,
 						Type:  discordgo.PermissionOverwriteTypeRole,
-						Allow: discordgo.PermissionViewChannel | discordgo.PermissionSendMessages | discordgo.PermissionReadMessageHistory,
+						Allow: discordgo.PermissionViewChannel | discordgo.PermissionReadMessageHistory | discordgo.PermissionSendMessagesInThreads,
 						Deny:  discordgo.PermissionAll,
 					},
 				},
 			})
+
 			if err != nil {
 				response := &discordgo.InteractionResponse{
 					Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -319,6 +399,23 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			err = s.InteractionRespond(ic.Interaction, response)
 			if err != nil {
 				Error("Interaction respond create forum-channel", err)
+			}
+			_, err = s.ChannelEditComplex(forum.ID, &discordgo.ChannelEdit{
+				AvailableTags: &[]discordgo.ForumTag{
+					{
+						Name:      "Report",
+						Moderated: false,
+						EmojiName: "📢",
+					},
+					{
+						Name:      "Question",
+						Moderated: false,
+						EmojiName: "❔",
+					},
+				},
+			})
+			if err != nil {
+				Error("error create tags!", err)
 			}
 			return
 		case "leave-giveaway":
@@ -619,7 +716,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				}
 
 				// Формування запиту з параметрами
-				query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = %s, channel_log_voiceID = %s, channel_log_serverID = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[1], ChannelsID[2], ic.GuildID)
+				query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[1], ChannelsID[2], ic.GuildID)
 				go UpdateDB(query)
 
 				return
@@ -647,7 +744,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			}
 
 			// Формування запиту з параметрами
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = %s, channel_log_voiceID = %s, channel_log_serverID = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[0], ChannelsID[0], ic.GuildID)
+			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[0], ChannelsID[0], ic.GuildID)
 			go UpdateDB(query)
 
 			return
@@ -674,7 +771,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				Error("", err)
 			}
 
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = %s, channel_log_voiceID = 0, channel_log_serverID = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
+			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = 0, channel_id_server = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
 			go UpdateDB(query)
 
 			return
@@ -701,18 +798,87 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				Error("", err)
 			}
 
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = 0, channel_log_voiceID = %s, channel_log_serverID = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
+			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = 0, channel_id_voice = %s, channel_id_server = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
 			go UpdateDB(query)
 
 			return
 		case "fd_event":
-			query := fmt.Sprintf(`UPDATE %s SET channel_log_msgID = 0, channel_log_voiceID = 0, channel_log_serverID = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
+			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = 0, channel_id_voice = 0, channel_id_server = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
 			go UpdateDB(query)
 
 			return
 		}
 	} else if ic.Type == discordgo.InteractionModalSubmit {
 		switch ic.ModalSubmitData().CustomID {
+		case "ticket-create":
+			index := 0
+			tags := []string{}
+
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			}
+			err := s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond", err)
+			}
+
+			forumID := ic.ModalSubmitData().Components[0].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			authorID := ic.ModalSubmitData().Components[1].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			title := ic.ModalSubmitData().Components[2].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			tagUse := ic.ModalSubmitData().Components[3].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			description := ic.ModalSubmitData().Components[4].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+
+			author, err := s.User(authorID)
+			if err != nil {
+				Error("error parsing author info", err)
+			}
+			forum, err := s.Channel(forumID)
+			if err != nil {
+				Error("error parsing forum info", err)
+			}
+			switch tagUse {
+			case "1":
+				for _, tag := range forum.AvailableTags {
+					tags = append(tags, tag.ID)
+					break
+				}
+			case "2":
+				for _, tag := range forum.AvailableTags {
+					if index == 1 {
+						tags = append(tags, tag.ID)
+						break
+					}
+					index++
+				}
+			case "3":
+				for _, tag := range forum.AvailableTags {
+					tags = append(tags, tag.ID)
+				}
+			}
+
+			_, err = s.ForumThreadStartComplex(forumID, &discordgo.ThreadStart{
+				Name:                title,
+				AutoArchiveDuration: 1440,
+				Type:                discordgo.ChannelTypeGuildForum,
+				Invitable:           false,
+				RateLimitPerUser:    30,
+				AppliedTags:         tags,
+			},
+				&discordgo.MessageSend{
+					Content: description,
+					Embed: &discordgo.MessageEmbed{
+						Timestamp: time.Now().Format(time.RFC3339),
+						Footer: &discordgo.MessageEmbedFooter{
+							Text:    author.Username,
+							IconURL: author.AvatarURL("256"),
+						},
+					},
+				})
+			if err != nil {
+				fmt.Println("Error creating thread:", err)
+				return
+			}
+			return
 		case "giveaway-create":
 			currentTime := time.Now().Format(time.RFC3339)
 

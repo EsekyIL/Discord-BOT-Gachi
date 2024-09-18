@@ -11,26 +11,32 @@ import (
 	"github.com/lmittmann/tint"
 )
 
-func registerServer(g *discordgo.GuildCreate, database *sql.DB) {
+func registerServer(sess *discordgo.Session, g *discordgo.GuildCreate, database *sql.DB) {
 	// Формування SQL-запиту для створення таблиці
 	query := fmt.Sprintf(`
 CREATE TABLE IF NOT EXISTS %s (
     id BIGINT PRIMARY KEY, 
-    name VARCHAR(255), 
-    members INTEGER, 
-    channel_log_msgID VARCHAR(255), 
-    channel_log_voiceID VARCHAR(255), 
-    channel_log_serverID VARCHAR(255), 
-    channel_log_punishmentID VARCHAR(255), 
-    Language VARCHAR(10)
+    name VARCHAR(60), 
+    members INTEGER,
+	owner VARCHAR(60), 
+    vip tinyint(1) DEFAULT 0, 
+	forum tinyint(1) DEFAULT 0, 
+    channel_id_forum VARCHAR(30) DEFAULT '0', 
+    channel_id_message VARCHAR(30) DEFAULT '0', 
+    channel_id_voice VARCHAR(30) DEFAULT '0', 
+	channel_id_server VARCHAR(30) DEFAULT '0'
 )`, shortenNumber(g.Guild.ID))
 	_, err := database.Exec(query)
 	if err != nil {
 		Error("error creating table", err)
 	}
-
+	owner, err := sess.User(g.OwnerID)
+	if err != nil {
+		Error("error query", err)
+		return
+	}
 	// Формування SQL-запиту для вставки даних
-	query = fmt.Sprintf(`INSERT INTO %s (id, name, members, channel_log_msgID, channel_log_voiceID, channel_log_serverID, channel_log_punishmentID, Language) VALUES (?,?, ?, ?, ?, ?, ?, ?)`, shortenNumber(g.Guild.ID))
+	query = fmt.Sprintf(`INSERT INTO %s (id, name, members, owner) VALUES (?, ?, ?, ?)`, shortenNumber(g.Guild.ID))
 
 	// Підготовка запиту для вставки даних
 	statement, err := database.Prepare(query)
@@ -41,7 +47,7 @@ CREATE TABLE IF NOT EXISTS %s (
 	defer statement.Close()
 
 	// Виконання запиту на вставку даних
-	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, 0, 0, 0, 0, "EU")
+	_, err = statement.Exec(g.Guild.ID, g.Guild.Name, g.Guild.MemberCount, fmt.Sprintf("%s | %s", owner.Username, owner.ID))
 	if err != nil {
 		Error("error executing INSERT statement", err)
 		return

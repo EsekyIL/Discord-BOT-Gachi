@@ -13,7 +13,6 @@ var cache = make(map[string]string)
 var cacheMutex sync.RWMutex
 
 func getCreationTime(userID string) time.Time {
-
 	id, _ := strconv.ParseInt(userID, 10, 64)
 
 	timestamp := (id >> 22) + 1420070400000
@@ -22,11 +21,9 @@ func getCreationTime(userID string) time.Time {
 }
 
 func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate) {
-	currentTime := time.Now().Format(time.RFC3339)
-
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", ic.GuildID)
-	if channel_log_serverID == 0 {
-		return
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(ic.GuildID), ic.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
 	}
 
 	MaxUses := strconv.Itoa(ic.MaxUses)
@@ -49,21 +46,23 @@ func InvCreate(s *discordgo.Session, ic *discordgo.InviteCreate) {
 			IconURL: ic.Inviter.AvatarURL("256"),
 		},
 		Color:     0x37c4b8, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("invite create problem", err)
 		return
 	}
 }
 func UserJoin(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
-	currentTime := time.Now().Format(time.RFC3339)
-
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", gma.GuildID)
-	if channel_log_serverID == 0 {
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(gma.GuildID), gma.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
 		return
 	}
+
 	userCreatedAt := getCreationTime(gma.User.ID)
 
 	embed := &discordgo.MessageEmbed{
@@ -76,9 +75,9 @@ func UserJoin(s *discordgo.Session, gma *discordgo.GuildMemberAdd) {
 			URL: gma.AvatarURL("256"),
 		},
 		Color:     0x5fc437, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error guild member add", err)
 		return
@@ -130,13 +129,14 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
 	}
 	UserInfo, _ := s.User(UserID)
 
-	currentTime := time.Now().Format(time.RFC3339)
-
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", gmr.GuildID)
-
-	if channel_log_serverID == 0 {
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(gmr.GuildID), gmr.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
 		return
 	}
+
 	if kick {
 
 		code, err := generateCode(6)
@@ -157,9 +157,9 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
 				IconURL: UserInfo.AvatarURL("256"),
 			},
 			Color:     0xc43737, // Колір (у форматі HEX)
-			Timestamp: currentTime,
+			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		message, _ := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		message, _ := s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 		ActionType = fmt.Sprintf("[**KICKED**]"+"(https://discord.com/channels/%s/%s/%s)", gmr.GuildID, message.ChannelID, message.ID)
 	}
 	embed := &discordgo.MessageEmbed{
@@ -172,9 +172,9 @@ func UserExit(s *discordgo.Session, gmr *discordgo.GuildMemberRemove) {
 			URL: gmr.AvatarURL("256"),
 		},
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error in leave people", err)
 		return
@@ -197,10 +197,11 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 		Reason = entry.Reason
 	}
 
-	currentTime := time.Now().Format(time.RFC3339)
-
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", ban.GuildID)
-	if channel_log_serverID == 0 {
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(ban.GuildID), ban.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
 		return
 	}
 
@@ -226,9 +227,9 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 			IconURL: UserInfo.AvatarURL("256"),
 		},
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error user banned!", err)
 	}
@@ -243,9 +244,9 @@ func UserBanned(s *discordgo.Session, ban *discordgo.GuildBanAdd) {
 			URL: ban.User.AvatarURL("256"),
 		},
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error user left guild x2", err)
 		return
@@ -256,7 +257,13 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 		return
 	}
 
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", mute.GuildID)
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(mute.GuildID), mute.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
+		return
+	}
 
 	if mute.BeforeUpdate != nil {
 		AuditLog, err := s.GuildAuditLog(mute.GuildID, "", "", 24, 1)
@@ -266,8 +273,6 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 		}
 
 		var UserID string
-
-		currentTime := time.Now().Format(time.RFC3339)
 
 		for _, entry := range AuditLog.AuditLogEntries {
 
@@ -291,9 +296,9 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 				IconURL: UserInfo.AvatarURL("256"),
 			},
 			Color:     0x5fc437, // Колір (у форматі HEX)
-			Timestamp: currentTime,
+			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 		if err != nil {
 			Error("error user unmute", err)
 			return
@@ -309,8 +314,6 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 
 		var UserID string
 		var Reason string
-
-		currentTime := time.Now().Format(time.RFC3339)
 
 		for _, entry := range AuditLog.AuditLogEntries {
 
@@ -341,9 +344,9 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 				IconURL: UserInfo.AvatarURL("256"),
 			},
 			Color:     0xc43737, // Колір (у форматі HEX)
-			Timestamp: currentTime,
+			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 		if err != nil {
 			Error("error mute member", err)
 			return
@@ -353,7 +356,6 @@ func UserMuted(s *discordgo.Session, mute *discordgo.GuildMemberUpdate) {
 	}
 }
 func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
-	currentTime := time.Now().Format(time.RFC3339)
 
 	AuditLog, err := s.GuildAuditLog(unban.GuildID, "", "", 23, 1)
 	if err != nil {
@@ -369,7 +371,13 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 
 	UserInfo, _ := s.User(UserID)
 
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", unban.GuildID)
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(unban.GuildID), unban.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
+		return
+	}
 
 	embed := &discordgo.MessageEmbed{
 		Title: "Unban",
@@ -385,9 +393,9 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 			IconURL: UserInfo.AvatarURL("256"),
 		},
 		Color:     0x5fc437, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error member unbanned", err)
 		return
@@ -396,7 +404,13 @@ func UserUnBanned(s *discordgo.Session, unban *discordgo.GuildBanRemove) {
 func RoleCreated(s *discordgo.Session, rc *discordgo.GuildRoleCreate) {
 	var roleName string
 	var user *discordgo.User
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", rc.GuildID)
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(rc.GuildID), rc.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
+		return
+	}
 
 	AuditLog, err := s.GuildAuditLog(rc.GuildID, "", "", 30, 1)
 	if err != nil {
@@ -426,14 +440,20 @@ func RoleCreated(s *discordgo.Session, rc *discordgo.GuildRoleCreate) {
 		Color:     0x5fc437, // Колір (у форматі HEX)
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error role created", err)
 		return
 	}
 }
 func RoleDeleted(s *discordgo.Session, rd *discordgo.GuildRoleDelete) {
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", rd.GuildID)
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(rd.GuildID), rd.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
+		return
+	}
 	var user *discordgo.User
 	AuditLog, err := s.GuildAuditLog(rd.GuildID, "", "", 32, 1)
 	if err != nil {
@@ -456,7 +476,7 @@ func RoleDeleted(s *discordgo.Session, rd *discordgo.GuildRoleDelete) {
 				IconURL: user.AvatarURL("256"),
 			},
 		}
-		_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+		_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 		if err != nil {
 			Error("error role deleted", err)
 			return
@@ -472,7 +492,7 @@ func RoleDeleted(s *discordgo.Session, rd *discordgo.GuildRoleDelete) {
 		Color:     0xc43737, // Колір (у форматі HEX)
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error role deleted", err)
 		return
@@ -492,7 +512,13 @@ func RoleUpdated(s *discordgo.Session, ru *discordgo.GuildRoleUpdate) {
 	if ru.Role.ID != roleID {
 		return
 	}
-	channel_log_serverID, _ := SelectDB("channel_log_serverID", ru.GuildID)
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(ru.GuildID), ru.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Server == "0" {
+		return
+	}
 	embed := &discordgo.MessageEmbed{
 		Title: "Role updated",
 		Description: fmt.Sprintf(
@@ -502,7 +528,7 @@ func RoleUpdated(s *discordgo.Session, ru *discordgo.GuildRoleUpdate) {
 		Color:     0xc4b137, // Колір (у форматі HEX)
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_serverID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Server, embed)
 	if err != nil {
 		Error("error role updated", err)
 		return

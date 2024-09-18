@@ -2,19 +2,19 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
 )
 
 func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-	channel_log_voiceID, _ := SelectDB("channel_log_voiceID", vs.GuildID)
-	if channel_log_voiceID == 0 {
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(vs.GuildID), vs.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Voice == "0" {
 		return
 	}
-
-	currentTime := time.Now().Format(time.RFC3339)
 
 	if vs.BeforeUpdate == nil {
 		embed := &discordgo.MessageEmbed{
@@ -27,10 +27,10 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 				URL: vs.Member.AvatarURL("256"),
 			},
 			Color:     0x5fc437, // Колір (у форматі HEX)
-			Timestamp: currentTime,
+			Timestamp: time.Now().Format(time.RFC3339),
 		}
 
-		_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		_, err := s.ChannelMessageSendEmbed(rows.Channel_ID_Voice, embed)
 		if err != nil {
 			Error("error join the room", err)
 			return
@@ -52,9 +52,9 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 				URL: vs.Member.AvatarURL("256"),
 			},
 			Color:     0xc43737, // Колір (у форматі HEX)
-			Timestamp: currentTime,
+			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		_, err := s.ChannelMessageSendEmbed(rows.Channel_ID_Voice, embed)
 		if err != nil {
 			Error("error leave the room", err)
 			return
@@ -73,9 +73,9 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 				URL: vs.Member.AvatarURL("256"),
 			},
 			Color:     0x37c4b8, // Колір (у форматі HEX)
-			Timestamp: currentTime,
+			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_voiceID), embed)
+		_, err := s.ChannelMessageSendEmbed(rows.Channel_ID_Voice, embed)
 		if err != nil {
 			Error("error move member room", err)
 			return

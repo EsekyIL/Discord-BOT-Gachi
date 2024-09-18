@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/bwmarrin/discordgo"
@@ -12,12 +11,13 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 	if m.BeforeUpdate == nil {
 		return
 	}
-	channel_log_msgID, _ := SelectDB("channel_log_msgID", m.GuildID)
-	if channel_log_msgID == 0 {
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(m.GuildID), m.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Message == "0" {
 		return
 	}
-
-	currentTime := time.Now().Format(time.RFC3339)
 
 	embed := &discordgo.MessageEmbed{
 		Title: "Message updated",
@@ -42,10 +42,10 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 			IconURL: m.Author.AvatarURL("256"), // URL для іконки (може бути порожнім рядком)
 		},
 		Color:     0xc4b137, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_msgID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Message, embed)
 	if err != nil {
 		Error("error message update", err)
 		return
@@ -53,13 +53,13 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 
 }
 func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete) {
-	channel_log_msgID, _ := SelectDB("channel_log_msgID", m.GuildID)
-	if channel_log_msgID == 0 || m.BeforeDelete == nil {
+	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(m.GuildID), m.GuildID))
+	if err != nil {
+		Error("error parsing data in DB", err)
+	}
+	if rows.Channel_ID_Message == "0" || m.BeforeDelete == nil {
 		return
 	}
-
-	currentTime := time.Now().Format(time.RFC3339)
-
 	embed := &discordgo.MessageEmbed{
 		Title: "Message deleted",
 		Fields: []*discordgo.MessageEmbedField{
@@ -74,9 +74,9 @@ func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete) {
 			m.ChannelID, m.BeforeDelete.Author.ID, m.Message.ID,
 		),
 		Color:     0xc43737, // Колір (у форматі HEX)
-		Timestamp: currentTime,
+		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err := s.ChannelMessageSendEmbed(strconv.Itoa(channel_log_msgID), embed)
+	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Message, embed)
 	if err != nil {
 		Error("error message deleted", err)
 		return
