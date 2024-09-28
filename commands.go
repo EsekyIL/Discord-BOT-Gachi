@@ -293,52 +293,50 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 
 		case "settings":
 			embed := &discordgo.MessageEmbed{
-				Title:       "Setting up bot functions",
-				Description: "> Select the item you want to adjust",
-				Thumbnail: &discordgo.MessageEmbedThumbnail{
-					URL: "https://i.imgur.com/o7wcuxw.png",
-				},
-				Color: 0x6892c2,
+				Title: "Setting up bot functions",
+				Description: "This bot helps you maintain a detailed log of server events, automatically tracking important user actions. " +
+					"The ticket system allows members to easily create support or issue requests, making it simple to manage and monitor everything in one place. \n\n" +
+					"For more information, you can click the button to access articles about the bot.",
 				Footer: &discordgo.MessageEmbedFooter{
-					Text:    "Kazaki",
-					IconURL: "https://i.imgur.com/04X5nxH.png",
+					Text:    ic.Interaction.Member.User.Username,
+					IconURL: ic.Interaction.Member.User.AvatarURL("256"),
 				},
+				Timestamp: time.Now().Format(time.RFC3339),
 			}
 
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
 				Data: &discordgo.InteractionResponseData{
 					Embeds: []*discordgo.MessageEmbed{embed},
-					Flags:  discordgo.MessageFlagsEphemeral,
 					Components: []discordgo.MessageComponent{
 						discordgo.ActionsRow{
 							Components: []discordgo.MessageComponent{
-								discordgo.SelectMenu{
-									// Select menu, as other components, must have a customID, so we set it to this value.
-									CustomID:    "select",
-									Placeholder: "Select the setting item 👇",
-									Options: []discordgo.SelectMenuOption{
-										{
-											Label: "Logging in",
-											// As with components, this things must have their own unique "id" to identify which is which.
-											// In this case such id is Value field.
-											Value: "logging",
-											Emoji: &discordgo.ComponentEmoji{
-												Name: "📝",
-											},
-											// You can also make it a default option, but in this case we won't.
-											Default:     false,
-											Description: "Event logging on the server",
-										},
-										{
-											Label: "Ticket system",
-											Value: "ticket-sys",
-											Emoji: &discordgo.ComponentEmoji{
-												Name: "🎟️",
-											},
-											Description: "Create ticket system on the server",
-										},
+								discordgo.Button{
+									Label:    "Logging",
+									Style:    discordgo.PrimaryButton,
+									Disabled: false,
+									Emoji: &discordgo.ComponentEmoji{
+										Name: "📋",
 									},
+									CustomID: "logging-btn",
+								},
+								discordgo.Button{
+									Label:    "Ticket system",
+									Style:    discordgo.PrimaryButton,
+									Disabled: false,
+									Emoji: &discordgo.ComponentEmoji{
+										Name: "🎫",
+									},
+									CustomID: "ticket-btn",
+								},
+								discordgo.Button{
+									Label:    "About",
+									Style:    discordgo.LinkButton,
+									Disabled: false,
+									Emoji: &discordgo.ComponentEmoji{
+										Name: "🔗",
+									},
+									URL: "https://google.com",
 								},
 							},
 						},
@@ -353,7 +351,202 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		return
 	} else if ic.Type == discordgo.InteractionMessageComponent {
 		switch ic.MessageComponentData().CustomID {
+		case "logging-btn":
+			minValues := 4
+			embed := &discordgo.MessageEmbed{
+				Title:       "Logging",
+				Description: "Click the button to automatically create login channels, or select them manually.",
+				Footer: &discordgo.MessageEmbedFooter{
+					Text:    ic.Interaction.Member.User.Username,
+					IconURL: ic.Interaction.Member.User.AvatarURL("256"),
+				},
+				Timestamp: time.Now().Format(time.RFC3339),
+			}
+			components := []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.SelectMenu{
+							MenuType:     discordgo.ChannelSelectMenu,
+							MinValues:    &minValues,
+							MaxValues:    4,
+							CustomID:     "channel_select",
+							Placeholder:  "It is necessary to poke here",
+							ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
+						},
+					},
+				},
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.Button{
+							Label:    "Auto",
+							Style:    discordgo.SuccessButton,
+							Disabled: false,
+							Emoji: &discordgo.ComponentEmoji{
+								Name: "📋",
+							},
+							CustomID: "auto-btn",
+						},
+					},
+				},
+			}
+			_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				Channel:    ic.ChannelID,
+				ID:         ic.Message.ID,
+				Embed:      embed,
+				Components: &components,
+			})
+			if err != nil {
+				Error("Channel message edit complex", err)
+				return
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond", err)
+			}
+			return
+		case "auto-btn":
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags:   discordgo.MessageFlagsEphemeral,
+					Content: "Now you can use the logging function",
+				},
+			}
+			err := s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond in participates ", err)
+			}
+			category, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+				Name:     "log",
+				Type:     discordgo.ChannelTypeGuildCategory,
+				Position: 1,
+				PermissionOverwrites: []*discordgo.PermissionOverwrite{
+					{
+						ID:   ic.GuildID,
+						Type: discordgo.PermissionOverwriteTypeRole,
+						Deny: discordgo.PermissionViewChannel,
+					},
+				},
+			})
+			if err != nil {
+				Error("error guild channel category create", err)
+			}
+			channel_msg, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+				Name:     "message",
+				Type:     discordgo.ChannelTypeGuildText,
+				ParentID: category.ID,
+				Position: 1,
+				PermissionOverwrites: []*discordgo.PermissionOverwrite{
+					{
+						ID:   ic.GuildID,
+						Type: discordgo.PermissionOverwriteTypeRole,
+						Deny: discordgo.PermissionViewChannel,
+					},
+				},
+			})
+			if err != nil {
+				fmt.Println("Помилка при створенні текстового каналу 1,", err)
+				return
+			}
+			channel_voice, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+				Name:     "voice",
+				Type:     discordgo.ChannelTypeGuildText,
+				ParentID: category.ID,
+				Position: 2,
+				PermissionOverwrites: []*discordgo.PermissionOverwrite{
+					{
+						ID:   ic.GuildID,
+						Type: discordgo.PermissionOverwriteTypeRole,
+						Deny: discordgo.PermissionViewChannel,
+					},
+				},
+			})
+			if err != nil {
+				fmt.Println("Помилка при створенні текстового каналу 1,", err)
+				return
+			}
+			channel_server, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+				Name:     "server",
+				Type:     discordgo.ChannelTypeGuildText,
+				ParentID: category.ID,
+				Position: 3,
+				PermissionOverwrites: []*discordgo.PermissionOverwrite{
+					{
+						ID:   ic.GuildID,
+						Type: discordgo.PermissionOverwriteTypeRole,
+						Deny: discordgo.PermissionViewChannel,
+					},
+				},
+			})
+			if err != nil {
+				fmt.Println("Помилка при створенні текстового каналу 1,", err)
+				return
+			}
+			channel_penalty, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+				Name:     "penalty",
+				Type:     discordgo.ChannelTypeGuildText,
+				ParentID: category.ID,
+				Position: 4,
+				PermissionOverwrites: []*discordgo.PermissionOverwrite{
+					{
+						ID:   ic.GuildID,
+						Type: discordgo.PermissionOverwriteTypeRole,
+						Deny: discordgo.PermissionViewChannel,
+					},
+				},
+			})
+			if err != nil {
+				fmt.Println("Помилка при створенні текстового каналу 1,", err)
+				return
+			}
+			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s, channel_id_penalty = %s WHERE id = %s`, shortenNumber(ic.GuildID), channel_msg.ID, channel_voice.ID, channel_server.ID, channel_penalty.ID, ic.GuildID)
+			go UpdateDB(query)
+			s.ChannelMessageDelete(ic.ChannelID, ic.Message.ID)
+			return
+		case "ticket-btn":
+			embed := &discordgo.MessageEmbed{
+				Title: "About ticket system",
+				Description: "The ticket system is a feedback system with the `administration/moderation` of the guild. " +
+					"The bot will automatically create a forum channel. Then the `/ticket` command will be available. " +
+					"Configure access rights yourself!\n\n" + "***__Recommended: disable the right to create posts for all users.__***",
+			}
+			components := []discordgo.MessageComponent{
+				discordgo.ActionsRow{
+					Components: []discordgo.MessageComponent{
+						discordgo.Button{
+							Style:    discordgo.SuccessButton,
+							Disabled: false,
+							CustomID: "start-ticket",
+							Emoji: &discordgo.ComponentEmoji{
+								Name: "🚀",
+							},
+						},
+					},
+				},
+			}
+			_, err := s.ChannelMessageEditComplex(&discordgo.MessageEdit{
+				Channel:    ic.ChannelID,
+				ID:         ic.Message.ID,
+				Embed:      embed,
+				Components: &components,
+			})
+			if err != nil {
+				Error("Channel message edit complex", err)
+				return
+			}
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			}
+			err = s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond", err)
+			}
+			return
 		case "start-ticket":
+			s.ChannelMessageDelete(ic.ChannelID, ic.Message.ID)
 			var everyoneID string
 			roles, err := s.GuildRoles(ic.GuildID)
 			if err != nil {
@@ -556,39 +749,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				},
 			}
 			switch selectedValue {
-			case "ticket-sys":
-				embed = &discordgo.MessageEmbed{
-					Title: "About ticket system",
-					Description: ">>> The ticket system is a feedback system with the `administration/moderation` of the guild.\n" +
-						"The bot will automatically create a forum channel. Then the `/ticket` command will be available.\n" +
-						"Configure access rights yourself!\n" + "**Recommended: disable the right to create posts for all users.**",
-				}
-				response := &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Flags:  discordgo.MessageFlagsEphemeral,
-						Embeds: []*discordgo.MessageEmbed{embed},
-						Components: []discordgo.MessageComponent{
-							discordgo.ActionsRow{
-								Components: []discordgo.MessageComponent{
-									discordgo.Button{
-										Style:    discordgo.SuccessButton,
-										Disabled: false,
-										CustomID: "start-ticket",
-										Emoji: &discordgo.ComponentEmoji{
-											Name: "🚀",
-										},
-									},
-								},
-							},
-						},
-					},
-				}
-				err := s.InteractionRespond(ic.Interaction, response)
-				if err != nil {
-					Error("Interaction respond in participates ", err)
-				}
-				return
+
 			case "logging":
 				minValues := 1
 				response := &discordgo.InteractionResponse{

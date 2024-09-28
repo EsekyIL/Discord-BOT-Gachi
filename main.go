@@ -35,6 +35,7 @@ type RowData struct {
 	Channel_ID_Message string
 	Channel_ID_Voice   string
 	Channel_ID_Server  string
+	Channel_ID_Penalty string
 }
 
 func generateCode(length int) (string, error) {
@@ -115,6 +116,7 @@ func SelectDB(query string) (*RowData, error) {
 			&result.Channel_ID_Message,
 			&result.Channel_ID_Voice,
 			&result.Channel_ID_Server,
+			&result.Channel_ID_Penalty,
 		)
 		if err != nil {
 			return &result, err

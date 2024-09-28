@@ -24,7 +24,8 @@ CREATE TABLE IF NOT EXISTS %s (
     channel_id_forum VARCHAR(30) DEFAULT '0', 
     channel_id_message VARCHAR(30) DEFAULT '0', 
     channel_id_voice VARCHAR(30) DEFAULT '0', 
-	channel_id_server VARCHAR(30) DEFAULT '0'
+	channel_id_server VARCHAR(30) DEFAULT '0',
+	channel_id_penalty VARCHAR(30) DEFAULT '0'
 )`, shortenNumber(g.Guild.ID))
 	_, err := database.Exec(query)
 	if err != nil {
