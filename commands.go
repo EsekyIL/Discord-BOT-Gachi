@@ -354,8 +354,13 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		case "logging-btn":
 			minValues := 4
 			embed := &discordgo.MessageEmbed{
-				Title:       "Logging",
-				Description: "Click the button to automatically create login channels, or select them manually.",
+				Title: "Logging",
+				Description: "Click the button to automatically create login channels, or select them manually. \n\n" +
+					"***Or select the channels in this order:***" + "\n" +
+					"1. Message channel\n" +
+					"2. Voice chat channel\n" +
+					"3. Event channel on the server\n" +
+					"4. Channel of punishments\n",
 				Footer: &discordgo.MessageEmbedFooter{
 					Text:    ic.Interaction.Member.User.Username,
 					IconURL: ic.Interaction.Member.User.AvatarURL("256"),
@@ -369,7 +374,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 							MenuType:     discordgo.ChannelSelectMenu,
 							MinValues:    &minValues,
 							MaxValues:    4,
-							CustomID:     "channel_select",
+							CustomID:     "channel-slct",
 							Placeholder:  "It is necessary to poke here",
 							ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
 						},
@@ -407,6 +412,25 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				Error("Interaction respond", err)
 			}
 			return
+		case "channel-slct":
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Data: &discordgo.InteractionResponseData{
+					Flags:   discordgo.MessageFlagsEphemeral,
+					Content: "Now you can use the logging function",
+				},
+			}
+			err := s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond in participates ", err)
+			}
+			channelsID := ic.MessageComponentData().Values
+
+			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s, channel_id_penalty = %s WHERE id = %s`, shortenNumber(ic.GuildID), channelsID[0], channelsID[1], channelsID[2], channelsID[3], ic.GuildID)
+			go UpdateDB(query)
+			s.ChannelMessageDelete(ic.ChannelID, ic.Message.ID)
+			return
+
 		case "auto-btn":
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseChannelMessageWithSource,
@@ -715,268 +739,6 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			if err != nil {
 				Error("Interaction respond", err)
 			}
-			return
-		case "select":
-			selectedValue := ic.MessageComponentData().Values[0]
-			embed := &discordgo.MessageEmbed{
-				Title:       "Configuring server logging",
-				Description: ">>> Select channels to log. From `one` to `three`. You can change them at any time.",
-				Thumbnail: &discordgo.MessageEmbedThumbnail{
-					URL: "https://i.imgur.com/BKYSMoP.png",
-				},
-				Color: 0x6892c2,
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    "Kazaki",
-					IconURL: "https://i.imgur.com/04X5nxH.png",
-				},
-				Fields: []*discordgo.MessageEmbedField{
-					{
-						Name:  "Select the first channel",
-						Value: "*The first channel shows you `change/delete` messages on the server.*",
-					},
-					{
-						Name:  "Select the second channel",
-						Value: "*The second channel gives you `enter/transition/exit` from the voice channels on the server.*",
-					},
-					{
-						Name:  "Selecting the third channel",
-						Value: "*The third channel displays `login/logout/ban/kick/timeout` of the user on the server.*",
-					},
-					{
-						Name:  "Channel selection",
-						Value: "***If you want the logging output to one channel, just select the channel you need!***",
-					},
-				},
-			}
-			switch selectedValue {
-
-			case "logging":
-				minValues := 1
-				response := &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Embeds: []*discordgo.MessageEmbed{embed},
-						Flags:  discordgo.MessageFlagsEphemeral,
-						Components: []discordgo.MessageComponent{
-							discordgo.ActionsRow{
-								Components: []discordgo.MessageComponent{
-									discordgo.SelectMenu{
-										MinValues:    &minValues,
-										MaxValues:    4,
-										MenuType:     discordgo.ChannelSelectMenu,
-										CustomID:     "channel_select",
-										Placeholder:  "It is necessary to poke here",
-										ChannelTypes: []discordgo.ChannelType{discordgo.ChannelTypeGuildText},
-									},
-								},
-							},
-						},
-					},
-				}
-				err := s.InteractionRespond(ic.Interaction, response)
-				if err != nil {
-					Error("", err)
-				}
-				return
-			}
-		case "channel_select":
-			ChannelsID = ic.MessageComponentData().Values
-			switch len(ChannelsID) {
-			case 1:
-				response := &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Flags: discordgo.MessageFlagsEphemeral,
-						Content: ">>> *If you want to send all logs to one channel, click the `All logs` button." +
-							"If you need specific logging for messages, voice channels, or events, select the appropriate option.*",
-						Components: []discordgo.MessageComponent{
-							discordgo.ActionsRow{
-								Components: []discordgo.MessageComponent{
-									discordgo.Button{
-										Label:    "All logs",
-										Style:    discordgo.SuccessButton,
-										Disabled: false,
-										CustomID: "fd_yes",
-										Emoji: &discordgo.ComponentEmoji{
-											Name: "✔️",
-										},
-									},
-									discordgo.Button{
-										Label:    "Message",
-										Style:    discordgo.SecondaryButton,
-										Disabled: false,
-										CustomID: "fd_message",
-										Emoji: &discordgo.ComponentEmoji{
-											Name: "💬",
-										},
-									},
-									discordgo.Button{
-										Label:    "Voice channels",
-										Style:    discordgo.SecondaryButton,
-										Disabled: false,
-										CustomID: "fd_voice",
-										Emoji: &discordgo.ComponentEmoji{
-											Name: "🎙️",
-										},
-									},
-									discordgo.Button{
-										Label:    "Events",
-										Style:    discordgo.SecondaryButton,
-										Disabled: false,
-										CustomID: "fd_event",
-										Emoji: &discordgo.ComponentEmoji{
-											Name: "📢",
-										},
-									},
-								},
-							},
-						},
-					},
-				}
-				err := s.InteractionRespond(ic.Interaction, response)
-				if err != nil {
-					Error("", err)
-				}
-
-				return
-			case 2:
-				embed := &discordgo.MessageEmbed{
-					Title:       "CAT",
-					Color:       0xfadb84,
-					Description: "> I'm lazzy cat xD",
-					Image: &discordgo.MessageEmbedImage{
-						URL: "https://i.imgur.com/gYaQOEj.jpg",
-					},
-					Footer: &discordgo.MessageEmbedFooter{
-						Text:    "eseky",
-						IconURL: "https://i.imgur.com/04X5nxH.png",
-					},
-				}
-				response := &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Flags:  discordgo.MessageFlagsEphemeral,
-						Embeds: []*discordgo.MessageEmbed{embed},
-					},
-				}
-				err := s.InteractionRespond(ic.Interaction, response)
-				if err != nil {
-					Error("", err)
-				}
-				return
-			case 3:
-				embed := &discordgo.MessageEmbed{
-					Title:       "Successfully",
-					Color:       0x0ea901,
-					Description: "> You can now use server-wide logging",
-					Footer: &discordgo.MessageEmbedFooter{
-						Text:    "Kazaki",
-						IconURL: "https://i.imgur.com/04X5nxH.png",
-					},
-				}
-				response := &discordgo.InteractionResponse{
-					Type: discordgo.InteractionResponseChannelMessageWithSource,
-					Data: &discordgo.InteractionResponseData{
-						Flags:  discordgo.MessageFlagsEphemeral,
-						Embeds: []*discordgo.MessageEmbed{embed},
-					},
-				}
-				err := s.InteractionRespond(ic.Interaction, response)
-				if err != nil {
-					Error("", err)
-				}
-
-				// Формування запиту з параметрами
-				query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[1], ChannelsID[2], ic.GuildID)
-				go UpdateDB(query)
-
-				return
-			}
-		case "fd_yes":
-			embed := &discordgo.MessageEmbed{
-				Title:       "Successfully",
-				Color:       0x0ea901,
-				Description: "> Now you can use logging of the whole server in only one channel",
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    "Kazaki",
-					IconURL: "https://i.imgur.com/04X5nxH.png",
-				},
-			}
-			response := &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags:  discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{embed},
-				},
-			}
-			err := s.InteractionRespond(ic.Interaction, response)
-			if err != nil {
-				Error("", err)
-			}
-
-			// Формування запиту з параметрами
-			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ChannelsID[0], ChannelsID[0], ic.GuildID)
-			go UpdateDB(query)
-
-			return
-		case "fd_message":
-
-			embed := &discordgo.MessageEmbed{
-				Title:       "Successfully",
-				Color:       0x0ea901,
-				Description: "> Now you can only use message logging",
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    "Kazaki",
-					IconURL: "https://i.imgur.com/04X5nxH.png",
-				},
-			}
-			response := &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags:  discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{embed},
-				},
-			}
-			err := s.InteractionRespond(ic.Interaction, response)
-			if err != nil {
-				Error("", err)
-			}
-
-			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = 0, channel_id_server = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
-			go UpdateDB(query)
-
-			return
-		case "fd_voice":
-
-			embed := &discordgo.MessageEmbed{
-				Title:       "Successfully",
-				Color:       0x0ea901,
-				Description: "> Now you can only use voice channel logging",
-				Footer: &discordgo.MessageEmbedFooter{
-					Text:    "Kazaki",
-					IconURL: "https://i.imgur.com/04X5nxH.png",
-				},
-			}
-			response := &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
-				Data: &discordgo.InteractionResponseData{
-					Flags:  discordgo.MessageFlagsEphemeral,
-					Embeds: []*discordgo.MessageEmbed{embed},
-				},
-			}
-			err := s.InteractionRespond(ic.Interaction, response)
-			if err != nil {
-				Error("", err)
-			}
-
-			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = 0, channel_id_voice = %s, channel_id_server = 0 WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
-			go UpdateDB(query)
-
-			return
-		case "fd_event":
-			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = 0, channel_id_voice = 0, channel_id_server = %s WHERE id = %s`, shortenNumber(ic.GuildID), ChannelsID[0], ic.GuildID)
-			go UpdateDB(query)
-
 			return
 		}
 	} else if ic.Type == discordgo.InteractionModalSubmit {

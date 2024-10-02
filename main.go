@@ -9,8 +9,10 @@ import (
 	"log"
 	"log/slog"
 	"math/big"
+	"net/http"
 	"os"
 	"os/signal"
+	"runtime"
 	"syscall"
 	"time"
 
@@ -18,6 +20,9 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/joho/godotenv"
 	"github.com/lmittmann/tint"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/shirou/gopsutil/cpu"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -36,6 +41,31 @@ type RowData struct {
 	Channel_ID_Voice   string
 	Channel_ID_Server  string
 	Channel_ID_Penalty string
+}
+
+var start_time float64
+var (
+	cpuUsage = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "cpu_usage",
+		Help: "CPU usage percentage.",
+	})
+	memoryUsage = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "memory_usage",
+		Help: "Memory usage in MB.",
+	})
+	startTime = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "start_time",
+		Help: "Unix timestamp of when the application started.",
+	})
+)
+
+func init() {
+	// Реєструємо метрики
+	prometheus.MustRegister(cpuUsage)
+	prometheus.MustRegister(memoryUsage)
+	prometheus.MustRegister(startTime)
+	start_time = float64(time.Now().Unix())
+	startTime.Set(float64(time.Now().Unix()))
 }
 
 func generateCode(length int) (string, error) {
@@ -174,8 +204,33 @@ func ConnectDB() (*sql.DB, error) {
 
 	return database, nil
 }
+func corsMiddleware(next http.Handler) http.Handler { // The function of permissions for monitoring, if it is not needed - delete it.
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")             // Дозволяє всі походження
+		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS") // Дозволяє методи
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type") // Дозволяє заголовки
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
 
 func main() {
+	go func() {
+		http.Handle("/metrics", corsMiddleware(promhttp.Handler()))
+		fmt.Println(time.Now().Format(time.RFC1123), "Prometheus metrics available at :8081/metrics")
+		log.Fatal(http.ListenAndServe(":8081", nil))
+	}()
+	go func() {
+		fs := http.FileServer(http.Dir("./localhost"))
+		http.Handle("/", fs)
+		fmt.Println(time.Now().Format(time.RFC1123), "Monitoring web-site avaliable at :3000/")
+		log.Fatal(http.ListenAndServe(":3000", nil))
+	}()
+
+	// Two functions that raise local servers for monitoring from above. You can remove these features.
 
 	token := goDotEnvVariable("API_KEY")
 	sess, _ := discordgo.New("Bot " + token)
@@ -257,6 +312,14 @@ func main() {
 		go RoleUpdated(s, ru)
 	})
 
+	sess.AddHandler(func(s *discordgo.Session, cc *discordgo.ChannelCreate) {
+		go ChannelCreated(s, cc)
+	})
+
+	sess.AddHandler(func(s *discordgo.Session, cd *discordgo.ChannelDelete) {
+		go ChannelDeleted(s, cd)
+	})
+
 	go func() {
 		// Запускаємо перевірку
 		ticker := time.NewTicker(30 * time.Second)
@@ -264,6 +327,28 @@ func main() {
 
 		for range ticker.C {
 			checkGiveaways(sess)
+		}
+	}()
+
+	go func() { // The monitoring function can be removed.
+		for {
+			var memStats runtime.MemStats
+			runtime.ReadMemStats(&memStats)
+
+			memoryUsage.Set(float64(memStats.Alloc) / 1024 / 1024)
+
+			cpuPercentages, err := cpu.Percent(0, false)
+			if err != nil {
+				log.Printf("Error getting CPU usage: %v", err)
+			} else {
+				if len(cpuPercentages) > 0 {
+					cpuUsage.Set(cpuPercentages[0])
+				}
+			}
+
+			startTime.Set(start_time)
+
+			time.Sleep(1 * time.Second)
 		}
 	}()
 
@@ -275,8 +360,7 @@ func main() {
 	}
 	defer sess.Close()
 
-	currentTime := time.Now()
-	fmt.Println(currentTime.Format(time.RFC1123), "The bot is online!")
+	fmt.Println(time.Now().Format(time.RFC1123), "The bot is online!")
 
 	sc := make(chan os.Signal, 1) // Вимкнення бота CTRL+C
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
