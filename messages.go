@@ -11,11 +11,11 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 	if m.BeforeUpdate == nil {
 		return
 	}
-	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(m.GuildID), m.GuildID))
+	row, err := SelectDB(`SELECT * FROM servers WHERE guild_id = ?`, m.GuildID)
 	if err != nil {
 		Error("error parsing data in DB", err)
 	}
-	if rows.Channel_ID_Message == "0" {
+	if row.channel_id_message == "0" {
 		return
 	}
 
@@ -45,7 +45,7 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
 
-	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Message, embed)
+	_, err = s.ChannelMessageSendEmbed(row.channel_id_message, embed)
 	if err != nil {
 		Error("error message update", err)
 		return
@@ -53,11 +53,11 @@ func MsgUpdate(s *discordgo.Session, m *discordgo.MessageUpdate) {
 
 }
 func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete) {
-	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(m.GuildID), m.GuildID))
+	row, err := SelectDB(`SELECT * FROM servers WHERE guild_id = ?`, m.GuildID)
 	if err != nil {
 		Error("error parsing data in DB", err)
 	}
-	if rows.Channel_ID_Message == "0" || m.BeforeDelete == nil {
+	if row.channel_id_message == "0" || m.BeforeDelete == nil {
 		return
 	}
 	embed := &discordgo.MessageEmbed{
@@ -76,7 +76,7 @@ func MsgDelete(s *discordgo.Session, m *discordgo.MessageDelete) {
 		Color:     0xc43737, // Колір (у форматі HEX)
 		Timestamp: time.Now().Format(time.RFC3339),
 	}
-	_, err = s.ChannelMessageSendEmbed(rows.Channel_ID_Message, embed)
+	_, err = s.ChannelMessageSendEmbed(row.channel_id_message, embed)
 	if err != nil {
 		Error("error message deleted", err)
 		return

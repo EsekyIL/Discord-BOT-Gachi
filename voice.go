@@ -8,11 +8,11 @@ import (
 )
 
 func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
-	rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(vs.GuildID), vs.GuildID))
+	row, err := SelectDB(`SELECT * FROM servers WHERE guild_id = ?`, vs.GuildID)
 	if err != nil {
 		Error("error parsing data in DB", err)
 	}
-	if rows.Channel_ID_Voice == "0" {
+	if row.channel_id_voice == "0" {
 		return
 	}
 
@@ -30,7 +30,7 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
 
-		_, err := s.ChannelMessageSendEmbed(rows.Channel_ID_Voice, embed)
+		_, err := s.ChannelMessageSendEmbed(row.channel_id_voice, embed)
 		if err != nil {
 			Error("error join the room", err)
 			return
@@ -54,7 +54,7 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 			Color:     0xc43737, // Колір (у форматі HEX)
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		_, err := s.ChannelMessageSendEmbed(rows.Channel_ID_Voice, embed)
+		_, err := s.ChannelMessageSendEmbed(row.channel_id_voice, embed)
 		if err != nil {
 			Error("error leave the room", err)
 			return
@@ -75,7 +75,7 @@ func VoiceLog(s *discordgo.Session, vs *discordgo.VoiceStateUpdate) {
 			Color:     0x37c4b8, // Колір (у форматі HEX)
 			Timestamp: time.Now().Format(time.RFC3339),
 		}
-		_, err := s.ChannelMessageSendEmbed(rows.Channel_ID_Voice, embed)
+		_, err := s.ChannelMessageSendEmbed(row.channel_id_voice, embed)
 		if err != nil {
 			Error("error move member room", err)
 			return

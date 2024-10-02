@@ -1,10 +1,8 @@
 package main
 
 import (
-	"crypto/md5"
 	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"fmt"
 	"log"
 	"log/slog"
@@ -30,17 +28,18 @@ const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 var usedCodes = make(map[string]bool) // Зберігаємо всі згенеровані коди
 
 type RowData struct {
-	ID                 string
-	Name               string
-	Members            string
-	Owner              string
-	Vip                bool
-	Forum              bool
-	Channel_ID_Forum   string
-	Channel_ID_Message string
-	Channel_ID_Voice   string
-	Channel_ID_Server  string
-	Channel_ID_Penalty string
+	guild_id           string
+	guild_name         string
+	guild_owner_id     string
+	guild_owner_name   string
+	members            string
+	vip                bool
+	forum              bool
+	channel_id_forum   string
+	channel_id_message string
+	channel_id_voice   string
+	channel_id_server  string
+	channel_id_penalty string
 }
 
 var start_time float64
@@ -90,12 +89,6 @@ func generateCode(length int) (string, error) {
 		// Якщо код вже існує, генеруємо новий
 	}
 }
-func shortenNumber(number string) string {
-	hasher := md5.New()
-	hasher.Write([]byte(number))
-	hash := hasher.Sum(nil)
-	return hex.EncodeToString(hash)[:8] // Обрізаємо до 8 символів
-}
 func goDotEnvVariable(key string) string {
 
 	// завантажити файл .env
@@ -119,47 +112,70 @@ func Error(msg string, err error) {
 	logger.Error(msg, "Помилка", err)
 }
 
-func SelectDB(query string) (*RowData, error) {
+func SelectDB(query string, args ...interface{}) (*RowData, error) {
 	var result RowData
 	database, err := ConnectDB()
 	if err != nil {
-		return &result, err
+		return nil, fmt.Errorf("error connecting to the database: %v", err)
 	}
-
 	defer database.Close()
 
-	rows, err := database.Query(query)
+	columnName := "guild_id" // Замініть на назву стовпця, який потрібно перевірити
+
+	exists, err := ColumnExists(database, columnName)
 	if err != nil {
-		return &result, err
+		return nil, err
+	}
+
+	if !exists {
+		err := fmt.Errorf("no rows found")
+		return nil, err
+	}
+
+	// Використовуємо підготовлений запит із параметрами
+	statement, err := database.Prepare(query)
+	if err != nil {
+		return nil, fmt.Errorf("error preparing statement: %v, query: %s", err, query)
+	}
+	defer statement.Close()
+
+	// Виконуємо запит з переданими параметрами
+	rows, err := statement.Query(args...)
+	if err != nil {
+		return nil, fmt.Errorf("error executing query: %v, query: %s", err, query)
 	}
 	defer rows.Close()
 
-	for rows.Next() {
+	// Проходимо через результати
+	if rows.Next() {
 		err := rows.Scan(
-			&result.ID,
-			&result.Name,
-			&result.Members,
-			&result.Owner,
-			&result.Vip,
-			&result.Forum,
-			&result.Channel_ID_Forum,
-			&result.Channel_ID_Message,
-			&result.Channel_ID_Voice,
-			&result.Channel_ID_Server,
-			&result.Channel_ID_Penalty,
+			&result.guild_id,
+			&result.guild_name,
+			&result.guild_owner_id,
+			&result.guild_owner_name,
+			&result.members,
+			&result.vip,
+			&result.forum,
+			&result.channel_id_forum,
+			&result.channel_id_message,
+			&result.channel_id_voice,
+			&result.channel_id_server,
+			&result.channel_id_penalty,
 		)
 		if err != nil {
-			return &result, err
+			return nil, fmt.Errorf("error scanning row: %v", err)
 		}
+	} else {
+		return nil, fmt.Errorf("no rows found")
 	}
 
 	if err = rows.Err(); err != nil {
-		return &result, err
+		return nil, err
 	}
 
 	return &result, nil
 }
-func UpdateDB(query string) error {
+func UpdateDB(query string, args ...interface{}) error {
 
 	database, err := ConnectDB()
 	if err != nil {
@@ -167,15 +183,17 @@ func UpdateDB(query string) error {
 	}
 	defer database.Close()
 
+	// Використовуємо підготовлений запит із параметрами
 	statement, err := database.Prepare(query)
 	if err != nil {
-		return fmt.Errorf("error preparing statement: %v", err)
+		return fmt.Errorf("error preparing statement: %v, query: %s", err, query)
 	}
 	defer statement.Close()
 
-	_, err = statement.Exec()
+	// Виконуємо запит з переданими параметрами
+	_, err = statement.Exec(args...)
 	if err != nil {
-		return fmt.Errorf("error executing query: %v", err)
+		return fmt.Errorf("error executing query: %v, query: %s", err, query)
 	}
 
 	return nil
@@ -244,25 +262,7 @@ func main() {
 	sess.State.TrackRoles = true
 
 	sess.AddHandler(func(s *discordgo.Session, g *discordgo.GuildCreate) {
-
-		database, err := ConnectDB()
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		query := fmt.Sprintf("SHOW TABLES LIKE '%s'", shortenNumber(g.Guild.ID))
-		rows, err := database.Query(query)
-		if err != nil {
-			fmt.Println("Error executing query:", err)
-			return
-		}
-		defer rows.Close()
-
-		// Перевіряємо, чи таблиця існує
-		if rows.Next() {
-			return
-		}
-		go registerServer(s, g, database) // Виклик функції для реєстрації сервера, якщо дані не знайдено
+		go registerServer(s, g) // Виклик функції для реєстрації сервера, якщо дані не знайдено
 
 	})
 	sess.AddHandler(func(s *discordgo.Session, ic *discordgo.InteractionCreate) {

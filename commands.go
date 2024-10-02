@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strconv"
 	"time"
@@ -98,6 +99,16 @@ func registerCommands(sess *discordgo.Session) {
 		Error("Error creating command ticket", err)
 		return
 	}
+	reportCreate := discordgo.ApplicationCommand{
+		Name:        "report",
+		Description: "reate a report for the bot creator",
+		Type:        discordgo.ChatApplicationCommand,
+	}
+	_, err = sess.ApplicationCommandCreate("1160175895475138611", "", &reportCreate)
+	if err != nil {
+		Error("Error creating command ticket", err)
+		return
+	}
 	/*err = sess.ApplicationCommandDelete("1160175895475138611", "", "1177394341371707423") ITS FIND AND DELETE COMMANDS, do not erase!!!!!!!!!!
 	if err != nil {
 		Error("Error delete command", err)
@@ -123,31 +134,83 @@ func registerCommands(sess *discordgo.Session) {
 func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 
 	if ic.Type == discordgo.InteractionApplicationCommand {
-		if !isAdmin(s, ic) {
+		switch ic.ApplicationCommandData().Name {
+		case "report":
 			response := &discordgo.InteractionResponse{
-				Type: discordgo.InteractionResponseChannelMessageWithSource,
+				Type: discordgo.InteractionResponseModal,
 				Data: &discordgo.InteractionResponseData{
-					Content: "You do not have permission to use this command.",
-					Flags:   discordgo.MessageFlagsEphemeral,
+					CustomID: "report-create",
+					Title:    "Create a report",
+					Components: []discordgo.MessageComponent{
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:  "guildID",
+									Label:     "Guild ID",
+									Style:     discordgo.TextInputShort,
+									MinLength: 6,
+									MaxLength: 24,
+									Value:     ic.GuildID,
+									Required:  true,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:  "authorID",
+									Label:     "author ID",
+									Style:     discordgo.TextInputShort,
+									Value:     ic.Member.User.ID,
+									MinLength: 6,
+									MaxLength: 24,
+									Required:  true,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "title",
+									Label:       "title",
+									Placeholder: "Enter a title...",
+									Style:       discordgo.TextInputShort,
+									MinLength:   4,
+									MaxLength:   24,
+									Required:    true,
+								},
+							},
+						},
+						discordgo.ActionsRow{
+							Components: []discordgo.MessageComponent{
+								discordgo.TextInput{
+									CustomID:    "description",
+									Label:       "description",
+									Style:       discordgo.TextInputParagraph,
+									Placeholder: "Enter the description of report...",
+									Required:    true,
+									MinLength:   100,
+									MaxLength:   2000,
+								},
+							},
+						},
+					},
 				},
 			}
 			err := s.InteractionRespond(ic.Interaction, response)
 			if err != nil {
-				Error("", err)
+				Error("Giveaway error creating", err)
 			}
 			return
-		}
 
-		switch ic.ApplicationCommandData().Name {
 		case "ticket":
-			rows, err := SelectDB(fmt.Sprintf("SELECT * FROM %s WHERE id = %s", shortenNumber(ic.GuildID), ic.GuildID))
+			row, err := SelectDB(`SELECT * FROM servers WHERE guild_id = ?`, ic.GuildID)
 			if err != nil {
 				Error("error parsing data in DB", err)
 			}
-			if !rows.Forum {
+			if !row.forum {
 				return
 			}
-
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
 				Data: &discordgo.InteractionResponseData{
@@ -160,7 +223,7 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 									CustomID:  "forumID",
 									Label:     "forum id",
 									Style:     discordgo.TextInputShort,
-									Value:     rows.Channel_ID_Forum,
+									Value:     row.channel_id_forum,
 									Required:  true,
 									MinLength: 1,
 									MaxLength: 23,
@@ -227,6 +290,20 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			}
 			return
 		case "gcreate":
+			if !isAdmin(s, ic) {
+				response := &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "You do not have permission to use this command.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				}
+				err := s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					Error("", err)
+				}
+				return
+			}
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
 				Data: &discordgo.InteractionResponseData{
@@ -292,6 +369,20 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			return
 
 		case "settings":
+			if !isAdmin(s, ic) {
+				response := &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "You do not have permission to use this command.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				}
+				err := s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					Error("", err)
+				}
+				return
+			}
 			embed := &discordgo.MessageEmbed{
 				Title: "Setting up bot functions",
 				Description: "This bot helps you maintain a detailed log of server events, automatically tracking important user actions. " +
@@ -426,8 +517,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			}
 			channelsID := ic.MessageComponentData().Values
 
-			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s, channel_id_penalty = %s WHERE id = %s`, shortenNumber(ic.GuildID), channelsID[0], channelsID[1], channelsID[2], channelsID[3], ic.GuildID)
-			go UpdateDB(query)
+			query := `UPDATE servers SET channel_id_message = ?, channel_id_voice = ?, channel_id_server = ?, channel_id_penalty = ? WHERE guild_id = ?`
+			go UpdateDB(query, channelsID[0], channelsID[1], channelsID[2], channelsID[3], ic.GuildID)
 			s.ChannelMessageDelete(ic.ChannelID, ic.Message.ID)
 			return
 
@@ -457,6 +548,23 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			})
 			if err != nil {
 				Error("error guild channel category create", err)
+			}
+			channel_server, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
+				Name:     "server",
+				Type:     discordgo.ChannelTypeGuildText,
+				ParentID: category.ID,
+				Position: 3,
+				PermissionOverwrites: []*discordgo.PermissionOverwrite{
+					{
+						ID:   ic.GuildID,
+						Type: discordgo.PermissionOverwriteTypeRole,
+						Deny: discordgo.PermissionViewChannel,
+					},
+				},
+			})
+			if err != nil {
+				fmt.Println("Помилка при створенні текстового каналу 1,", err)
+				return
 			}
 			channel_msg, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
 				Name:     "message",
@@ -492,23 +600,6 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				fmt.Println("Помилка при створенні текстового каналу 1,", err)
 				return
 			}
-			channel_server, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
-				Name:     "server",
-				Type:     discordgo.ChannelTypeGuildText,
-				ParentID: category.ID,
-				Position: 3,
-				PermissionOverwrites: []*discordgo.PermissionOverwrite{
-					{
-						ID:   ic.GuildID,
-						Type: discordgo.PermissionOverwriteTypeRole,
-						Deny: discordgo.PermissionViewChannel,
-					},
-				},
-			})
-			if err != nil {
-				fmt.Println("Помилка при створенні текстового каналу 1,", err)
-				return
-			}
 			channel_penalty, err := s.GuildChannelCreateComplex(ic.GuildID, discordgo.GuildChannelCreateData{
 				Name:     "penalty",
 				Type:     discordgo.ChannelTypeGuildText,
@@ -526,8 +617,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				fmt.Println("Помилка при створенні текстового каналу 1,", err)
 				return
 			}
-			query := fmt.Sprintf(`UPDATE %s SET channel_id_message = %s, channel_id_voice = %s, channel_id_server = %s, channel_id_penalty = %s WHERE id = %s`, shortenNumber(ic.GuildID), channel_msg.ID, channel_voice.ID, channel_server.ID, channel_penalty.ID, ic.GuildID)
-			go UpdateDB(query)
+			query := `UPDATE servers SET channel_id_message = ?, channel_id_voice = ?, channel_id_server = ?, channel_id_penalty = ? WHERE guild_id = ?`
+			go UpdateDB(query, channel_msg.ID, channel_voice.ID, channel_server.ID, channel_penalty.ID, ic.GuildID)
 			s.ChannelMessageDelete(ic.ChannelID, ic.Message.ID)
 			return
 		case "ticket-btn":
@@ -642,8 +733,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 				Error("error create tags!", err)
 			}
 
-			query := fmt.Sprintf(`UPDATE %s SET channel_id_forum = %s, forum = 1 WHERE id = %s`, shortenNumber(ic.GuildID), forum.ID, ic.GuildID)
-			go UpdateDB(query)
+			query := `UPDATE servers SET channel_id_forum = ?, forum = 1 WHERE guild_id = ?`
+			go UpdateDB(query, forum.ID, ic.GuildID)
 			return
 		case "leave-giveaway":
 			_, err := leaveUserGiveaway(ic.GuildID, ic.Interaction.Member.User.ID)
@@ -743,6 +834,31 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 		}
 	} else if ic.Type == discordgo.InteractionModalSubmit {
 		switch ic.ModalSubmitData().CustomID {
+		case "report-create":
+			response := &discordgo.InteractionResponse{
+				Type: discordgo.InteractionResponseDeferredMessageUpdate,
+			}
+			err := s.InteractionRespond(ic.Interaction, response)
+			if err != nil {
+				Error("Interaction respond", err)
+			}
+
+			guildID := ic.ModalSubmitData().Components[0].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			authorID := ic.ModalSubmitData().Components[1].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			title := ic.ModalSubmitData().Components[2].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+			description := ic.ModalSubmitData().Components[3].(*discordgo.ActionsRow).Components[0].(*discordgo.TextInput).Value
+
+			author, _ := s.User(authorID)
+			guild, _ := s.Guild(guildID)
+
+			query := `INSERT INTO reports (guild_name, guild_id, author_name, author_id, title, description) VALUES (?, ?, ?, ?, ?, ?)`
+			err = UpdateDB(query, guild.Name, guildID, author.GlobalName, authorID, title, description)
+			if err != nil {
+				log.Println("Error inserting record:", err)
+			}
+
+			return
+
 		case "ticket-create":
 			index := 0
 			tags := []string{}
