@@ -1,0 +1,6 @@
+2024/10/05 06:18:14 === Bot Started ===
+2024/10/05 06:18:26 Could not connect to database: unable to reach database: dial tcp: lookup ftp211.hostia.name: i/o timeout
+2024/10/05 06:18:26 Could not connect to database: unable to reach database: dial tcp: lookup ftp211.hostia.name: i/o timeout
+2024/10/05 06:18:26 Could not connect to database: unable to reach database: dial tcp: lookup ftp211.hostia.name: i/o timeout
+2024/10/05 06:21:16 === Bot Started ===
+2024/10/05 06:22:58 === Bot Started ===

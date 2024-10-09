@@ -136,6 +136,20 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 	if ic.Type == discordgo.InteractionApplicationCommand {
 		switch ic.ApplicationCommandData().Name {
 		case "report":
+			if !isAdmin(s, ic) {
+				response := &discordgo.InteractionResponse{
+					Type: discordgo.InteractionResponseChannelMessageWithSource,
+					Data: &discordgo.InteractionResponseData{
+						Content: "You do not have permission to use this command.",
+						Flags:   discordgo.MessageFlagsEphemeral,
+					},
+				}
+				err := s.InteractionRespond(ic.Interaction, response)
+				if err != nil {
+					Error("", err)
+				}
+				return
+			}
 			response := &discordgo.InteractionResponse{
 				Type: discordgo.InteractionResponseModal,
 				Data: &discordgo.InteractionResponseData{
@@ -851,8 +865,8 @@ func Commands(s *discordgo.Session, ic *discordgo.InteractionCreate) {
 			author, _ := s.User(authorID)
 			guild, _ := s.Guild(guildID)
 
-			query := `INSERT INTO reports (guild_name, guild_id, author_name, author_id, title, description) VALUES (?, ?, ?, ?, ?, ?)`
-			err = UpdateDB(query, guild.Name, guildID, author.GlobalName, authorID, title, description)
+			query := `INSERT INTO reports (guild_name, guild_id, author_name, author_id, title, description, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
+			err = UpdateDB(query, guild.Name, guildID, author.GlobalName, authorID, title, description, time.Now().Format(time.RFC3339))
 			if err != nil {
 				log.Println("Error inserting record:", err)
 			}

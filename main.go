@@ -1,16 +1,15 @@
 package main
 
 import (
+	"bufio"
 	"crypto/rand"
 	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
 	"math/big"
-	"net/http"
 	"os"
 	"os/signal"
-	"runtime"
 	"syscall"
 	"time"
 
@@ -19,8 +18,6 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/lmittmann/tint"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/shirou/gopsutil/cpu"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
@@ -41,8 +38,17 @@ type RowData struct {
 	channel_id_server  string
 	channel_id_penalty string
 }
+type Report struct {
+	ID          int    `json:"id"`
+	GuildName   string `json:"guild_name"`
+	GuildID     string `json:"guild_id"`
+	AuthorName  string `json:"author_name"`
+	AuthorID    string `json:"author_id"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	CreatedAt   string `json:"created_at"`
+}
 
-var start_time float64
 var (
 	cpuUsage = prometheus.NewGauge(prometheus.GaugeOpts{
 		Name: "cpu_usage",
@@ -63,7 +69,6 @@ func init() {
 	prometheus.MustRegister(cpuUsage)
 	prometheus.MustRegister(memoryUsage)
 	prometheus.MustRegister(startTime)
-	start_time = float64(time.Now().Unix())
 	startTime.Set(float64(time.Now().Unix()))
 }
 
@@ -175,6 +180,43 @@ func SelectDB(query string, args ...interface{}) (*RowData, error) {
 
 	return &result, nil
 }
+
+/*
+	func fetchReportsFromDB() ([]Report, error) {
+		var reports []Report
+
+		// Підключення до БД
+		database, err := ConnectDB()
+		if err != nil {
+			return nil, err
+		}
+		defer database.Close() // Завжди закриваємо підключення після завершення
+
+		// Запит до БД
+		query := `SELECT id, guild_name, guild_id, author_name, author_id, title, description, created_at FROM reports`
+		rows, err := database.Query(query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close() // Закриваємо рядки після завершення
+
+		// Обробка отриманих рядків
+		for rows.Next() {
+			var report Report
+			if err := rows.Scan(&report.ID, &report.GuildName, &report.GuildID, &report.AuthorName, &report.AuthorID, &report.Title, &report.Description, &report.CreatedAt); err != nil {
+				return nil, err
+			}
+			reports = append(reports, report) // Додаємо звіт до списку
+		}
+
+		// Перевірка на помилки після обробки рядків
+		if err := rows.Err(); err != nil {
+			return nil, err
+		}
+
+		return reports, nil // Повертаємо список репортів
+	}
+*/
 func UpdateDB(query string, args ...interface{}) error {
 
 	database, err := ConnectDB()
@@ -222,33 +264,38 @@ func ConnectDB() (*sql.DB, error) {
 
 	return database, nil
 }
-func corsMiddleware(next http.Handler) http.Handler { // The function of permissions for monitoring, if it is not needed - delete it.
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")             // Дозволяє всі походження
-		w.Header().Set("Access-Control-Allow-Methods", "GET, OPTIONS") // Дозволяє методи
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type") // Дозволяє заголовки
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
+
+/*
+	func reportsHandler(w http.ResponseWriter, r *http.Request) {
+		reports, err := fetchReportsFromDB() // Викликаємо функцію для отримання репортів
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		next.ServeHTTP(w, r)
-	})
-}
 
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(reports) // Відправляємо репорти у форматі JSON
+	}
+*/
 func main() {
-	go func() {
-		http.Handle("/metrics", corsMiddleware(promhttp.Handler()))
-		fmt.Println(time.Now().Format(time.RFC1123), "Prometheus metrics available at :8081/metrics")
-		log.Fatal(http.ListenAndServe(":8081", nil))
-	}()
-	go func() {
-		fs := http.FileServer(http.Dir("./localhost"))
-		http.Handle("/", fs)
-		fmt.Println(time.Now().Format(time.RFC1123), "Monitoring web-site avaliable at :3000/")
-		log.Fatal(http.ListenAndServe(":3000", nil))
-	}()
+	// Відкриваємо файл для запису логів
+	logFile, err := os.OpenFile("bot_logs.txt", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		log.Fatal("Could not open log file: ", err)
+	}
+	defer logFile.Close()
 
-	// Two functions that raise local servers for monitoring from above. You can remove these features.
+	// Налаштовуємо логер для запису в файл та консоль
+	log.SetOutput(logFile)
+	log.Println("=== Bot Started ===")
+
+	// Обробка панік для екстреного завершення
+	defer func() {
+		if r := recover(); r != nil {
+			log.Println("Bot crashed with error: ", r)
+			log.Println("=== Bot Crashed ===")
+		}
+	}()
 
 	token := goDotEnvVariable("API_KEY")
 	sess, _ := discordgo.New("Bot " + token)
@@ -330,7 +377,7 @@ func main() {
 		}
 	}()
 
-	go func() { // The monitoring function can be removed.
+	/*go func() { // The monitoring function can be removed.
 		for {
 			var memStats runtime.MemStats
 			runtime.ReadMemStats(&memStats)
@@ -350,11 +397,11 @@ func main() {
 
 			time.Sleep(1 * time.Second)
 		}
-	}()
+	}()*/
 
 	sess.Identify.Intents = discordgo.IntentsAllWithoutPrivileged | discordgo.IntentGuildMembers // Доп. дозволи
 
-	err := sess.Open()
+	err = sess.Open()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -362,7 +409,33 @@ func main() {
 
 	fmt.Println(time.Now().Format(time.RFC1123), "The bot is online!")
 
-	sc := make(chan os.Signal, 1) // Вимкнення бота CTRL+C
+	// Канал для сигналів від системи (наприклад, CTRL+C)
+	sc := make(chan os.Signal, 1)
 	signal.Notify(sc, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
-	<-sc
+
+	// Канал для вводу з консолі
+	stop := make(chan string)
+
+	// Стартуємо горутину для прослуховування вводу з консолі
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		for {
+			input, _ := reader.ReadString('\n')           // Читаємо рядок
+			if input == "stop\n" || input == "stop\r\n" { // Перевіряємо введене слово
+				stop <- "stop" // Надсилаємо сигнал у канал
+				return
+			}
+		}
+	}()
+
+	// Блокування виконання до отримання сигналу від системи або команди "stop"
+	select {
+	case <-sc:
+		fmt.Println("Received shutdown signal from system.")
+	case <-stop:
+		fmt.Println("Received 'stop' command from console.")
+	}
+
+	// Код після завершення роботи бота
+	fmt.Println("Shutting down...")
 }
