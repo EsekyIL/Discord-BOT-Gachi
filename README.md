@@ -22,3 +22,9 @@ And also the token of your bot in Discord developers.
 | Mysql | https://github.com/go-sql-driver/mysql | v1.8.1 | 
 | Godotenv | https://github.com/joho/godotenv | v1.5.1 |
 | Tint | https://github.com/lmittmann/tint | v1.0.5 |
+
+## Support
+If anyone wants to donate to the coffee - USDT (TRC20) TDsqxMedBWULLpXSor2UZafmPUN3WhPmBa
+
+I will be very grateful!!♥
+
